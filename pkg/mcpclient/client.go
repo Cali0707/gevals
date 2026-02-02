@@ -2,7 +2,9 @@ package mcpclient
 
 import (
 	"context"
+	"fmt"
 	"net/http"
+	"os"
 	"os/exec"
 	"slices"
 
@@ -27,6 +29,7 @@ func Connect(ctx context.Context, cfg *ServerConfig) (*Client, error) {
 		}
 	} else {
 		cmd := exec.Command(cfg.Command, cfg.Args...)
+		cmd.Env = buildEnv(cfg.Env)
 		transport = &mcp.CommandTransport{Command: cmd}
 	}
 
@@ -49,7 +52,7 @@ func Connect(ctx context.Context, cfg *ServerConfig) (*Client, error) {
 
 func (c *Client) GetAllowedTools(ctx context.Context) []*mcp.Tool {
 	allowed := []*mcp.Tool{}
-	for t, err := range c.Tools(context.Background(), &mcp.ListToolsParams{}) {
+	for t, err := range c.Tools(ctx, &mcp.ListToolsParams{}) {
 		if err != nil {
 			continue
 		}
@@ -66,4 +69,13 @@ func (c *Client) GetAllowedTools(ctx context.Context) []*mcp.Tool {
 
 func (c *Client) GetConfig() *ServerConfig {
 	return c.cfg
+}
+
+func buildEnv(env map[string]string) []string {
+	full := os.Environ()
+	for k, v := range env {
+		full = append(full, fmt.Sprintf("%s=%s", k, v))
+	}
+
+	return full
 }

@@ -224,6 +224,10 @@ func (s *server) GetAllowedTools(ctx context.Context) []*mcp.Tool {
 }
 
 func (s *server) Close() error {
+	if s.cancel == nil {
+		return nil
+	}
+
 	s.cancel()
 	return <-s.done
 }

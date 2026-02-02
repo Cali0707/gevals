@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"time"
 )
 
@@ -65,7 +66,7 @@ func (m *manager) Get(name string) (*Client, bool) {
 }
 
 func (m *manager) GetAll() map[string]*Client {
-	return m.sessions
+	return maps.Clone(m.sessions)
 }
 
 func (m *manager) Close(ctx context.Context) error {
@@ -83,7 +84,7 @@ func (m *manager) Close(ctx context.Context) error {
 		case <-ctx.Done():
 			return ctx.Err()
 		case closeErr := <-results:
-			err = errors.Join(closeErr)
+			err = errors.Join(err, closeErr)
 		}
 	}
 

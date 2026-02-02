@@ -168,6 +168,9 @@ func (r *evalRunner) RunWithProgress(ctx context.Context, taskPattern string, ca
 	if err != nil {
 		return nil, fmt.Errorf("failed to create mcp manager: %w", err)
 	}
+	defer func () {
+		_ = mcpManager.Close(ctx)
+	}()
 
 	agentSpec, err := r.loadAgentSpec()
 	if err != nil {
@@ -336,7 +339,7 @@ func (r *evalRunner) setupTaskResources(
 		return nil, nil, nil, fmt.Errorf("failed to create task runner for task '%s': %w", tc.spec.Metadata.Name, err)
 	}
 
-	manager, err := mcpproxy.NewServerManger(ctx, mcpManager)
+	manager, err := mcpproxy.NewServerManager(ctx, mcpManager)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to create mcp proxy server manager: %w", err)
 	}

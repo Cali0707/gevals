@@ -39,7 +39,7 @@ type serverManager struct {
 	eg     *errgroup.Group
 }
 
-func NewServerManger(ctx context.Context, manager mcpclient.Manager) (ServerManager, error) {
+func NewServerManager(ctx context.Context, manager mcpclient.Manager) (ServerManager, error) {
 	clients := manager.GetAll()
 	servers := make(map[string]Server, len(clients))
 	for name, client := range clients {
