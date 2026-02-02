@@ -3,6 +3,7 @@ package acpclient
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"slices"
@@ -37,20 +38,9 @@ type client struct {
 }
 
 func (c *client) Start(ctx context.Context) error {
-	c.cmd = exec.CommandContext(ctx, c.cfg.Cmd, c.cfg.Args...)
-
-	stdin, err := c.cmd.StdinPipe()
+	stdin, stdout, err := c.startPipes(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to open stdin pipe to acp client: %w", err)
-	}
-
-	stdout, err := c.cmd.StdoutPipe()
-	if err != nil {
-		return fmt.Errorf("failed to open stdout pipe to acp client: %w", err)
-	}
-
-	if err := c.cmd.Start(); err != nil {
-		return fmt.Errorf("failed to start acp client: %w", err)
+		return err
 	}
 
 	c.conn = acp.NewClientSideConnection(c, stdin, stdout)
@@ -63,12 +53,12 @@ func (c *client) Start(ctx context.Context) error {
 		},
 	})
 	if err != nil {
-		_ = c.cmd.Process.Kill()
+		_ = c.Close(ctx)
 		return fmt.Errorf("failed to initialize connection to acp agent: %w", err)
 	}
 
 	if !initResp.AgentCapabilities.McpCapabilities.Http {
-		_ = c.cmd.Process.Kill()
+		_ = c.Close(ctx)
 		return fmt.Errorf("invalid acp agent: mcpchecker requires acp agents support http mcp transport")
 	}
 
@@ -139,6 +129,48 @@ func (c *client) Run(ctx context.Context, prompt string, servers mcpproxy.Server
 }
 
 func (c *client) Close(ctx context.Context) error {
+	if c.cfg.Transport != nil {
+		return c.cfg.Transport.Close(ctx)
+	}
+	return c.closeSubprocess(ctx)
+}
+
+func (c *client) startPipes(ctx context.Context) (stdin io.Writer, stdout io.Reader, err error) {
+	if c.cfg.Transport != nil {
+		return c.startTransport(ctx)
+	}
+	return c.startSubprocess(ctx)
+}
+
+func (c *client) startTransport(ctx context.Context) (io.Writer, io.Reader, error) {
+	stdin, stdout, err := c.cfg.Transport.Start(ctx)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to start transport: %w", err)
+	}
+	return stdin, stdout, nil
+}
+
+func (c *client) startSubprocess(ctx context.Context) (io.Writer, io.Reader, error) {
+	c.cmd = exec.CommandContext(ctx, c.cfg.Cmd, c.cfg.Args...)
+
+	stdin, err := c.cmd.StdinPipe()
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to open stdin pipe to acp client: %w", err)
+	}
+
+	stdout, err := c.cmd.StdoutPipe()
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to open stdout pipe to acp client: %w", err)
+	}
+
+	if err := c.cmd.Start(); err != nil {
+		return nil, nil, fmt.Errorf("failed to start acp client: %w", err)
+	}
+
+	return stdin, stdout, nil
+}
+
+func (c *client) closeSubprocess(ctx context.Context) error {
 	if c.cmd == nil || (c.cmd.ProcessState != nil && c.cmd.ProcessState.Exited()) {
 		return nil
 	}

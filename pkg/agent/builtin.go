@@ -2,6 +2,7 @@ package agent
 
 var builtinTypes = map[string]BuiltinAgent{
 	"openai-agent": &OpenAIAgent{},
+	"openai-acp":   &OpenAIACPAgent{},
 	"claude-code":  &ClaudeCodeAgent{},
 }
 

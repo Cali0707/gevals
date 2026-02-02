@@ -18,6 +18,7 @@ var (
 	modelKey     string
 	modelName    string
 	systemPrompt string
+	runAcp       bool
 )
 
 var rootCmd = &cobra.Command{
@@ -41,6 +42,7 @@ func init() {
 	rootCmd.Flags().StringVar(&modelKey, "model-key", getEnvOrDefault("MODEL_KEY", ""), "Model API key")
 	rootCmd.Flags().StringVar(&modelName, "model-name", getEnvOrDefault("MODEL_NAME", ""), "Model name to use")
 	rootCmd.Flags().StringVar(&systemPrompt, "system", getEnvOrDefault("SYSTEM_PROMPT", ""), "System prompt for the agent")
+	rootCmd.Flags().BoolVar(&runAcp, "acp", false, "Run as an ACP agent")
 
 	// Mark required flags
 	rootCmd.MarkFlagRequired("mcp-url")
@@ -62,7 +64,6 @@ func runAgent(cmd *cobra.Command, args []string) error {
 	ctx := context.Background()
 
 	// Create the AI agent
-	fmt.Printf("Creating AI agent with modelName: %s\n", modelName)
 	agentInstance, err := openaiagent.NewAIAgent(modelBaseURL, modelKey, modelName, systemPrompt)
 	if err != nil {
 		return fmt.Errorf("failed to create AI agent: %w", err)
@@ -76,15 +77,19 @@ func runAgent(cmd *cobra.Command, args []string) error {
 	}()
 
 	// Add the MCP server
-	fmt.Printf("Connecting to MCP server: %s\n", mcpURL)
 	if err := agentInstance.AddMCPServer(ctx, mcpURL); err != nil {
 		return fmt.Errorf("failed to add MCP server: %w", err)
 	}
 
-	// Run the agent with the provided prompt
-	fmt.Printf("Running agent with prompt: %s\n\n", prompt)
+	if runAcp {
+		return openaiagent.RunACP(ctx, agentInstance, os.Stdin, os.Stdout)
+	}
 
-	result, err := agentInstance.Run(ctx, prompt)
+	return runLegacy(ctx, agentInstance, prompt)
+}
+
+func runLegacy(ctx context.Context, agent openaiagent.Agent, prompt string) error {
+	result, err := agent.Run(ctx, prompt)
 	if err != nil {
 		return fmt.Errorf("agent execution failed: %w", err)
 	}

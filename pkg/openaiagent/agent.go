@@ -14,14 +14,23 @@ type Agent interface {
 	Run(ctx context.Context, prompt string) (string, error)
 }
 
-type aiAgent struct {
+// AIAgent is an AI agent that connects to MCP servers and uses an OpenAI-compatible API.
+type AIAgent struct {
 	client       *openai.Client
 	mcpClients   []*McpClient
 	model        shared.ChatModel
 	systemPrompt string
 }
 
-func NewAIAgent(url, apiKey, model, systemPrompt string) (*aiAgent, error) {
+type runOpts struct {
+	prompt              string
+	onNewMessage        func(ctx context.Context, msg openai.ChatCompletionMessage) error
+	onNewToolCall       func(ctx context.Context, name string, args map[string]any) (string, error)
+	onToolCallCompleted func(ctx context.Context, id string, output string) error
+	toolCallAllowed     func(ctx context.Context, id string, args map[string]any) (bool, error)
+}
+
+func NewAIAgent(url, apiKey, model, systemPrompt string) (*AIAgent, error) {
 	if url == "" || apiKey == "" || model == "" {
 		return nil, fmt.Errorf("url, API key, and model name must all be provided to create an ai agent")
 	}
@@ -31,7 +40,7 @@ func NewAIAgent(url, apiKey, model, systemPrompt string) (*aiAgent, error) {
 		option.WithAPIKey(apiKey),
 	)
 
-	return &aiAgent{
+	return &AIAgent{
 		client:       &client,
 		mcpClients:   make([]*McpClient, 0),
 		model:        shared.ChatModel(model),
@@ -40,7 +49,7 @@ func NewAIAgent(url, apiKey, model, systemPrompt string) (*aiAgent, error) {
 }
 
 // AddMCPServer adds an MCP server to the agent
-func (o *aiAgent) AddMCPServer(ctx context.Context, serverURL string) error {
+func (a *AIAgent) AddMCPServer(ctx context.Context, serverURL string) error {
 	mcpClient, err := NewMcpClient(ctx, serverURL)
 	if err != nil {
 		return fmt.Errorf("failed to create MCP client for %s: %w", serverURL, err)
@@ -52,23 +61,27 @@ func (o *aiAgent) AddMCPServer(ctx context.Context, serverURL string) error {
 		return fmt.Errorf("failed to load MCP tools from %s: %w", serverURL, err)
 	}
 
-	o.mcpClients = append(o.mcpClients, mcpClient)
+	a.mcpClients = append(a.mcpClients, mcpClient)
 	return nil
 }
 
-func (o *aiAgent) Run(ctx context.Context, prompt string) (string, error) {
+func (a *AIAgent) Run(ctx context.Context, prompt string) (string, error) {
+	return a.runTask(ctx, newNoopRunOpts(prompt))
+}
+
+func (a *AIAgent) runTask(ctx context.Context, opts runOpts) (string, error) {
 	// Start conversation with system prompt (if provided) and user's prompt
 	var messages []openai.ChatCompletionMessageParamUnion
 
-	if o.systemPrompt != "" {
-		messages = append(messages, openai.SystemMessage(o.systemPrompt))
+	if a.systemPrompt != "" {
+		messages = append(messages, openai.SystemMessage(a.systemPrompt))
 	}
 
-	messages = append(messages, openai.UserMessage(prompt))
+	messages = append(messages, openai.UserMessage(opts.prompt))
 
 	// Get available tools from all MCP clients
 	var tools []openai.ChatCompletionToolUnionParam
-	for _, mcpClient := range o.mcpClients {
+	for _, mcpClient := range a.mcpClients {
 		clientTools := mcpClient.GetTools()
 		tools = append(tools, clientTools...)
 	}
@@ -76,7 +89,7 @@ func (o *aiAgent) Run(ctx context.Context, prompt string) (string, error) {
 	// Agent loop - continue until we get a final response without tool calls
 	for {
 		params := openai.ChatCompletionNewParams{
-			Model:    o.model,
+			Model:    a.model,
 			Messages: messages,
 		}
 
@@ -86,7 +99,7 @@ func (o *aiAgent) Run(ctx context.Context, prompt string) (string, error) {
 		}
 
 		// Make the chat completion request
-		completion, err := o.client.Chat.Completions.New(ctx, params)
+		completion, err := a.client.Chat.Completions.New(ctx, params)
 		if err != nil {
 			return "", fmt.Errorf("failed to create chat completion: %w", err)
 		}
@@ -97,6 +110,10 @@ func (o *aiAgent) Run(ctx context.Context, prompt string) (string, error) {
 
 		choice := completion.Choices[0]
 		message := choice.Message
+
+		if err := opts.onNewMessage(ctx, message); err != nil {
+			return "", fmt.Errorf("failed to handle new message: %w", err)
+		}
 
 		// Add the assistant's message to the conversation
 		// Important: Use ToParam() to preserve tool_calls if present, not just the content
@@ -119,10 +136,29 @@ func (o *aiAgent) Run(ctx context.Context, prompt string) (string, error) {
 				return "", fmt.Errorf("failed to parse tool arguments: %w", err)
 			}
 
-			// Find which MCP client has this tool and execute it
-			result, err := o.callToolOnAnyClient(ctx, toolCall.Function.Name, args)
+			toolCallID, err := opts.onNewToolCall(ctx, toolCall.Function.Name, args)
 			if err != nil {
-				result = fmt.Sprintf("Error calling tool: %v", err)
+				return "", fmt.Errorf("failed to handle new tool call: %w", err)
+			}
+
+			allowed, err := opts.toolCallAllowed(ctx, toolCallID, args)
+			if err != nil {
+				return "", fmt.Errorf("failed to check tool call permission: %w", err)
+			}
+
+			var result string
+			if !allowed {
+				result = "Tool call was rejected by the user."
+			} else {
+				// Find which MCP client has this tool and execute it
+				result, err = a.callToolOnAnyClient(ctx, toolCall.Function.Name, args)
+				if err != nil {
+					result = fmt.Sprintf("Error calling tool: %v", err)
+				}
+			}
+
+			if err := opts.onToolCallCompleted(ctx, toolCallID, result); err != nil {
+				return "", fmt.Errorf("failed to handle tool call completion: %w", err)
 			}
 
 			// Add tool result to conversation
@@ -132,9 +168,9 @@ func (o *aiAgent) Run(ctx context.Context, prompt string) (string, error) {
 }
 
 // callToolOnAnyClient finds the MCP client that has the specified tool and calls it
-func (o *aiAgent) callToolOnAnyClient(ctx context.Context, toolName string, arguments map[string]any) (string, error) {
+func (a *AIAgent) callToolOnAnyClient(ctx context.Context, toolName string, arguments map[string]any) (string, error) {
 	// Search through all MCP clients to find one that has this tool
-	for _, mcpClient := range o.mcpClients {
+	for _, mcpClient := range a.mcpClients {
 		tools := mcpClient.GetTools()
 		for _, tool := range tools {
 			// Check if this is a function tool with the matching name
@@ -149,9 +185,9 @@ func (o *aiAgent) callToolOnAnyClient(ctx context.Context, toolName string, argu
 }
 
 // Close closes the agent and any associated resources
-func (o *aiAgent) Close() error {
+func (a *AIAgent) Close() error {
 	var errs []error
-	for _, mcpClient := range o.mcpClients {
+	for _, mcpClient := range a.mcpClients {
 		if err := mcpClient.Close(); err != nil {
 			errs = append(errs, err)
 		}
@@ -162,4 +198,14 @@ func (o *aiAgent) Close() error {
 	}
 
 	return nil
+}
+
+func newNoopRunOpts(prompt string) runOpts {
+	return runOpts{
+		prompt:              prompt,
+		onNewMessage:        func(_ context.Context, _ openai.ChatCompletionMessage) error { return nil },
+		onNewToolCall:       func(_ context.Context, name string, _ map[string]any) (string, error) { return name, nil },
+		toolCallAllowed:     func(_ context.Context, _ string, _ map[string]any) (bool, error) { return true, nil },
+		onToolCallCompleted: func(_ context.Context, _, _ string) error { return nil },
+	}
 }
