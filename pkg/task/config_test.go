@@ -48,29 +48,35 @@ func TestFromFile(t *testing.T) {
 					Difficulty: DifficultyEasy,
 				},
 				Spec: &TaskSpec{
-					Setup: []steps.StepConfig{{
-						"script": mustMarshalStep(&util.Step{
-							Inline: `#!/usr/bin/env bash
+					Setup: []*steps.StepConfig{{
+						Config: map[string]json.RawMessage{
+							"script": mustMarshalStep(&util.Step{
+								Inline: `#!/usr/bin/env bash
 kubectl delete namespace create-pod-test --ignore-not-found
 kubectl create namespace create-pod-test`,
-						}),
+							}),
+						},
 					}},
-					Verify: []steps.StepConfig{{
-						"script": mustMarshalStep(&util.Step{
-							Inline: `#!/usr/bin/env bash
+					Verify: []*steps.StepConfig{{
+						Config: map[string]json.RawMessage{
+							"script": mustMarshalStep(&util.Step{
+								Inline: `#!/usr/bin/env bash
 if kubectl wait --for=condition=Ready pod/web-server -n create-pod-test --timeout=120s; then
     exit 0
 else
     exit 1
 fi`,
-						}),
+							}),
+						},
 					}},
-					Cleanup: []steps.StepConfig{{
-						"script": mustMarshalStep(&util.Step{
-							Inline: `#!/usr/bin/env bash
+					Cleanup: []*steps.StepConfig{{
+						Config: map[string]json.RawMessage{
+							"script": mustMarshalStep(&util.Step{
+								Inline: `#!/usr/bin/env bash
 kubectl delete pod web-server -n create-pod-test --ignore-not-found
 kubectl delete namespace create-pod-test --ignore-not-found`,
-						}),
+							}),
+						},
 					}},
 					Prompt: &util.Step{
 						Inline: "Please create a nginx pod named web-server in the create-pod-test namespace",

@@ -35,8 +35,10 @@ func translateV1Alpha1ToSteps(legacy *TaskStepsV1Alpha1) (*TaskSpec, error) {
 				return nil, err
 			}
 
-			spec.Verify = []steps.StepConfig{{
-				"llmJudge": raw,
+			spec.Verify = []*steps.StepConfig{{
+				Config: map[string]json.RawMessage{
+					"llmJudge": raw,
+				},
 			}}
 		}
 
@@ -45,17 +47,19 @@ func translateV1Alpha1ToSteps(legacy *TaskStepsV1Alpha1) (*TaskSpec, error) {
 	return spec, nil
 }
 
-func translateLegacyStep(step *util.Step) ([]steps.StepConfig, error) {
+func translateLegacyStep(step *util.Step) ([]*steps.StepConfig, error) {
 	if step == nil || step.IsEmpty() {
-		return []steps.StepConfig{}, nil
+		return []*steps.StepConfig{}, nil
 	}
 
 	raw, err := json.Marshal(step)
 	if err != nil {
-		return []steps.StepConfig{}, err
+		return []*steps.StepConfig{}, err
 	}
 
-	return []steps.StepConfig{{
-		"script": raw,
+	return []*steps.StepConfig{{
+		Config: map[string]json.RawMessage{
+			"script": raw,
+		},
 	}}, nil
 }

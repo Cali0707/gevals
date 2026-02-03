@@ -120,41 +120,41 @@ func TestRegistry_Parse(t *testing.T) {
 	}
 
 	tt := map[string]struct {
-		config       StepConfig
+		config       *StepConfig
 		expectedName string
 		expectErr    bool
 		errMsg       string
 	}{
 		"parse standard step": {
-			config:       StepConfig{"script": json.RawMessage(`{"inline": "echo hello"}`)},
+			config:       &StepConfig{Config: map[string]json.RawMessage{"script": json.RawMessage(`{"inline": "echo hello"}`)}},
 			expectedName: "script-runner",
 			expectErr:    false,
 		},
 		"parse prefix step": {
-			config:       StepConfig{"k8s.apply": json.RawMessage(`{"file": "deploy.yaml"}`)},
+			config:       &StepConfig{Config: map[string]json.RawMessage{"k8s.apply": json.RawMessage(`{"file": "deploy.yaml"}`)}},
 			expectedName: "k8s.apply",
 			expectErr:    false,
 		},
 		"unknown step type": {
-			config:    StepConfig{"unknown": json.RawMessage(`{}`)},
+			config:    &StepConfig{Config: map[string]json.RawMessage{"unknown": json.RawMessage(`{}`)}},
 			expectErr: true,
 			errMsg:    "unknown step type",
 		},
 		"unknown prefix": {
-			config:    StepConfig{"unknown.operation": json.RawMessage(`{}`)},
+			config:    &StepConfig{Config: map[string]json.RawMessage{"unknown.operation": json.RawMessage(`{}`)}},
 			expectErr: true,
 			errMsg:    "unknown step type",
 		},
 		"empty config": {
-			config:    StepConfig{},
+			config:    &StepConfig{},
 			expectErr: true,
 			errMsg:    "exactly one type",
 		},
 		"multiple types in config": {
-			config: StepConfig{
+			config: &StepConfig{Config: map[string]json.RawMessage{
 				"script": json.RawMessage(`{}`),
 				"http":   json.RawMessage(`{}`),
-			},
+			}},
 			expectErr: true,
 			errMsg:    "exactly one type",
 		},

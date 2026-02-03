@@ -90,6 +90,9 @@ func NewTaskRunner(ctx context.Context, cfg *TaskConfig) (TaskRunner, error) {
 	parser := steps.DefaultRegistry.WithExtensions(ctx, extensions)
 
 	for i, stepCfg := range cfg.Spec.Setup {
+		if stepCfg.ID == "" {
+			stepCfg.ID = fmt.Sprintf("setup_%d", i)
+		}
 		var stepErr error
 		r.setup[i], stepErr = parser.Parse(stepCfg)
 		if stepErr != nil {
@@ -98,6 +101,9 @@ func NewTaskRunner(ctx context.Context, cfg *TaskConfig) (TaskRunner, error) {
 	}
 
 	for i, stepCfg := range cfg.Spec.Verify {
+		if stepCfg.ID == "" {
+			stepCfg.ID = fmt.Sprintf("verify_%d", i)
+		}
 		var stepErr error
 		r.verify[i], stepErr = parser.Parse(stepCfg)
 		if stepErr != nil {
@@ -106,6 +112,9 @@ func NewTaskRunner(ctx context.Context, cfg *TaskConfig) (TaskRunner, error) {
 	}
 
 	for i, stepCfg := range cfg.Spec.Cleanup {
+		if stepCfg.ID == "" {
+			stepCfg.ID = fmt.Sprintf("cleanup_%d", i)
+		}
 		var stepErr error
 		r.cleanup[i], stepErr = parser.Parse(stepCfg)
 		if stepErr != nil {

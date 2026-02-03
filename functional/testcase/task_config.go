@@ -11,7 +11,7 @@ import (
 )
 
 // shellEscapeSingleQuote escapes a string for use within single quotes in a shell command.
-// It replaces each ' with '\'' (end single quote, escaped single quote, start single quote).
+// It replaces each ' with '\” (end single quote, escaped single quote, start single quote).
 func shellEscapeSingleQuote(s string) string {
 	return strings.ReplaceAll(s, "'", "'\\''")
 }
@@ -181,18 +181,18 @@ func (tc *TaskConfig) Steps() *task.TaskStepsV1Alpha1 {
 // the new step-based format with typed step arrays.
 type TaskConfigV2 struct {
 	metadata task.TaskMetadata
-	setup    []steps.StepConfig
-	cleanup  []steps.StepConfig
-	verify   []steps.StepConfig
+	setup    []*steps.StepConfig
+	cleanup  []*steps.StepConfig
+	verify   []*steps.StepConfig
 	prompt   *util.Step
 }
 
 // NewTaskConfigV2 creates a new task config builder using the new step-based format
 func NewTaskConfigV2() *TaskConfigV2 {
 	return &TaskConfigV2{
-		setup:   []steps.StepConfig{},
-		cleanup: []steps.StepConfig{},
-		verify:  []steps.StepConfig{},
+		setup:   []*steps.StepConfig{},
+		cleanup: []*steps.StepConfig{},
+		verify:  []*steps.StepConfig{},
 	}
 }
 
@@ -326,17 +326,17 @@ func (tc *TaskConfigV2) Metadata() task.TaskMetadata {
 }
 
 // Setup returns the setup steps
-func (tc *TaskConfigV2) Setup() []steps.StepConfig {
+func (tc *TaskConfigV2) Setup() []*steps.StepConfig {
 	return tc.setup
 }
 
 // Cleanup returns the cleanup steps
-func (tc *TaskConfigV2) Cleanup() []steps.StepConfig {
+func (tc *TaskConfigV2) Cleanup() []*steps.StepConfig {
 	return tc.cleanup
 }
 
 // Verify returns the verify steps
-func (tc *TaskConfigV2) Verify() []steps.StepConfig {
+func (tc *TaskConfigV2) Verify() []*steps.StepConfig {
 	return tc.verify
 }
 
@@ -357,7 +357,7 @@ func (tc *TaskConfigV2) Build() *task.TaskSpec {
 
 // --- Helper functions to create step configs ---
 
-func makeScriptStep(inline, file string) steps.StepConfig {
+func makeScriptStep(inline, file string) *steps.StepConfig {
 	cfg := map[string]any{}
 	if inline != "" {
 		cfg["inline"] = inline
@@ -366,10 +366,10 @@ func makeScriptStep(inline, file string) steps.StepConfig {
 		cfg["file"] = file
 	}
 	raw, _ := json.Marshal(cfg)
-	return steps.StepConfig{"script": raw}
+	return &steps.StepConfig{Config: map[string]json.RawMessage{"script": raw}}
 }
 
-func makeLLMJudgeStep(contains, exact string) steps.StepConfig {
+func makeLLMJudgeStep(contains, exact string) *steps.StepConfig {
 	cfg := map[string]any{}
 	if contains != "" {
 		cfg["contains"] = contains
@@ -378,16 +378,16 @@ func makeLLMJudgeStep(contains, exact string) steps.StepConfig {
 		cfg["exact"] = exact
 	}
 	raw, _ := json.Marshal(cfg)
-	return steps.StepConfig{"llmJudge": raw}
+	return &steps.StepConfig{Config: map[string]json.RawMessage{"llmJudge": raw}}
 }
 
-func makeHTTPStep(method, url string) steps.StepConfig {
+func makeHTTPStep(method, url string) *steps.StepConfig {
 	cfg := map[string]any{
 		"method": method,
 		"url":    url,
 	}
 	raw, _ := json.Marshal(cfg)
-	return steps.StepConfig{"http": raw}
+	return &steps.StepConfig{Config: map[string]json.RawMessage{"http": raw}}
 }
 
 // Re-export types for convenience
