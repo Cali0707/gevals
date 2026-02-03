@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 
@@ -98,9 +99,10 @@ func (res *openAIACPResult) GetOutput() string {
 
 	out, err := json.Marshal(res.updates)
 	if err != nil {
-		text := res.updates[len(res.updates)-1].AgentMessageChunk.Content.Text
-		if text != nil {
-			return text.Text
+		lastUpdate := res.updates[len(res.updates)-1]
+		if lastUpdate.AgentMessageChunk != nil &&
+			lastUpdate.AgentMessageChunk.Content.Text != nil {
+			return lastUpdate.AgentMessageChunk.Content.Text.Text
 		}
 		return "unable to get agent output from last acp update"
 	}
@@ -164,14 +166,15 @@ func (t *openAIACPTransport) Close(ctx context.Context) error {
 	t.agentToClientWriter.Close()
 	t.agentToClientReader.Close()
 
-	// Wait for agent goroutine to finish
+	// Wait for agent goroutine to finish and capture its error
+	var err error
 	select {
-	case <-t.done:
+	case err = <-t.done:
 	case <-ctx.Done():
+		err = ctx.Err()
 	}
 
-	t.agent.Close()
-	return nil
+	return errors.Join(err, t.agent.Close())
 }
 
 var _ acpclient.Transport = &openAIACPTransport{}

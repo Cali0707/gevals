@@ -22,7 +22,8 @@ type acpAgent struct {
 }
 
 type acpSession struct {
-	cancel context.CancelFunc
+	cancel     context.CancelFunc
+	mcpClients []*McpClient
 }
 
 var _ acp.Agent = (*acpAgent)(nil)
@@ -72,8 +73,34 @@ func (a *acpAgent) Initialize(ctx context.Context, params acp.InitializeRequest)
 func (a *acpAgent) NewSession(ctx context.Context, params acp.NewSessionRequest) (acp.NewSessionResponse, error) {
 	sessionID := acp.SessionId(randomID("sess"))
 
+	// Connect to MCP servers provided in the request
+	var mcpClients []*McpClient
+	for _, srv := range params.McpServers {
+		if srv.Http == nil {
+			continue
+		}
+		client, err := NewMcpClient(ctx, srv.Http.Url)
+		if err != nil {
+			// Close any clients we've already created
+			for _, c := range mcpClients {
+				c.Close()
+			}
+			return acp.NewSessionResponse{}, fmt.Errorf("failed to create MCP client for %s: %w", srv.Http.Name, err)
+		}
+		if err := client.LoadTools(ctx); err != nil {
+			client.Close()
+			for _, c := range mcpClients {
+				c.Close()
+			}
+			return acp.NewSessionResponse{}, fmt.Errorf("failed to load tools from MCP server %s: %w", srv.Http.Name, err)
+		}
+		mcpClients = append(mcpClients, client)
+	}
+
 	a.mu.Lock()
-	a.sessions[sessionID] = &acpSession{}
+	a.sessions[sessionID] = &acpSession{
+		mcpClients: mcpClients,
+	}
 	a.mu.Unlock()
 
 	return acp.NewSessionResponse{SessionId: sessionID}, nil
@@ -126,7 +153,7 @@ func (a *acpAgent) Prompt(ctx context.Context, params acp.PromptRequest) (acp.Pr
 	s.cancel = cancel
 	a.mu.Unlock()
 
-	opts := a.buildRunOpts(params.Prompt, params.SessionId)
+	opts := a.buildRunOpts(params.Prompt, params.SessionId, s.mcpClients)
 	_, err := a.agent.runTask(sessionCtx, opts)
 
 	a.mu.Lock()
@@ -144,7 +171,7 @@ func (a *acpAgent) Prompt(ctx context.Context, params acp.PromptRequest) (acp.Pr
 }
 
 // buildRunOpts constructs runOpts with ACP-aware handlers.
-func (a *acpAgent) buildRunOpts(promptParts []acp.ContentBlock, sessionID acp.SessionId) runOpts {
+func (a *acpAgent) buildRunOpts(promptParts []acp.ContentBlock, sessionID acp.SessionId, mcpClients []*McpClient) runOpts {
 	var prompt string
 	for _, p := range promptParts {
 		if p.Text != nil {
@@ -154,6 +181,7 @@ func (a *acpAgent) buildRunOpts(promptParts []acp.ContentBlock, sessionID acp.Se
 
 	return runOpts{
 		prompt:              prompt,
+		mcpClients:          mcpClients,
 		onNewMessage:        a.onNewMessageHandler(sessionID),
 		onNewToolCall:       a.onNewToolCallHandler(sessionID),
 		toolCallAllowed:     a.toolCallAllowedHandler(sessionID),

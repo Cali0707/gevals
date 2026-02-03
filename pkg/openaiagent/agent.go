@@ -24,6 +24,7 @@ type AIAgent struct {
 
 type runOpts struct {
 	prompt              string
+	mcpClients          []*McpClient
 	onNewMessage        func(ctx context.Context, msg openai.ChatCompletionMessage) error
 	onNewToolCall       func(ctx context.Context, name string, args map[string]any) (string, error)
 	onToolCallCompleted func(ctx context.Context, id string, output string) error
@@ -79,9 +80,12 @@ func (a *AIAgent) runTask(ctx context.Context, opts runOpts) (string, error) {
 
 	messages = append(messages, openai.UserMessage(opts.prompt))
 
+	// Merge agent's MCP clients with session-specific ones
+	allMcpClients := append(a.mcpClients, opts.mcpClients...)
+
 	// Get available tools from all MCP clients
 	var tools []openai.ChatCompletionToolUnionParam
-	for _, mcpClient := range a.mcpClients {
+	for _, mcpClient := range allMcpClients {
 		clientTools := mcpClient.GetTools()
 		tools = append(tools, clientTools...)
 	}
@@ -151,7 +155,7 @@ func (a *AIAgent) runTask(ctx context.Context, opts runOpts) (string, error) {
 				result = "Tool call was rejected by the user."
 			} else {
 				// Find which MCP client has this tool and execute it
-				result, err = a.callToolOnAnyClient(ctx, toolCall.Function.Name, args)
+				result, err = a.callToolOnClients(ctx, allMcpClients, toolCall.Function.Name, args)
 				if err != nil {
 					result = fmt.Sprintf("Error calling tool: %v", err)
 				}
@@ -167,10 +171,10 @@ func (a *AIAgent) runTask(ctx context.Context, opts runOpts) (string, error) {
 	}
 }
 
-// callToolOnAnyClient finds the MCP client that has the specified tool and calls it
-func (a *AIAgent) callToolOnAnyClient(ctx context.Context, toolName string, arguments map[string]any) (string, error) {
+// callToolOnClients finds the MCP client that has the specified tool and calls it
+func (a *AIAgent) callToolOnClients(ctx context.Context, clients []*McpClient, toolName string, arguments map[string]any) (string, error) {
 	// Search through all MCP clients to find one that has this tool
-	for _, mcpClient := range a.mcpClients {
+	for _, mcpClient := range clients {
 		tools := mcpClient.GetTools()
 		for _, tool := range tools {
 			// Check if this is a function tool with the matching name

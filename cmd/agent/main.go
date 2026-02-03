@@ -76,13 +76,13 @@ func runAgent(cmd *cobra.Command, args []string) error {
 		}
 	}()
 
-	// Add the MCP server
-	if err := agentInstance.AddMCPServer(ctx, mcpURL); err != nil {
-		return fmt.Errorf("failed to add MCP server: %w", err)
-	}
-
 	if runAcp {
 		return openaiagent.RunACP(ctx, agentInstance, os.Stdin, os.Stdout)
+	}
+
+	// Add the MCP server for legacy mode only
+	if err := agentInstance.AddMCPServer(ctx, mcpURL); err != nil {
+		return fmt.Errorf("failed to add MCP server: %w", err)
 	}
 
 	return runLegacy(ctx, agentInstance, prompt)
