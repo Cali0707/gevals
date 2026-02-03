@@ -114,11 +114,14 @@ func (a *acpAgent) Authenticate(ctx context.Context, params acp.AuthenticateRequ
 // Cancel implements acp.Agent.
 func (a *acpAgent) Cancel(ctx context.Context, params acp.CancelNotification) error {
 	a.mu.Lock()
-	s, ok := a.sessions[params.SessionId]
+	var cancel context.CancelFunc
+	if s := a.sessions[params.SessionId]; s != nil {
+		cancel = s.cancel
+	}
 	a.mu.Unlock()
 
-	if ok && s != nil && s.cancel != nil {
-		s.cancel()
+	if cancel != nil {
+		cancel()
 	}
 	return nil
 }
