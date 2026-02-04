@@ -22,8 +22,24 @@ type acpAgent struct {
 }
 
 type acpSession struct {
-	cancel     context.CancelFunc
-	mcpClients []*McpClient
+	ctx           context.Context
+	sessionCancel context.CancelFunc
+	promptCancel  context.CancelFunc
+	promptGen     uint64
+	mcpClients    []*McpClient
+}
+
+// cleanup cancels any active context and closes all MCP clients.
+func (s *acpSession) cleanup() {
+	if s.promptCancel != nil {
+		s.promptCancel()
+	}
+	if s.sessionCancel != nil {
+		s.sessionCancel()
+	}
+	for _, c := range s.mcpClients {
+		c.Close()
+	}
 }
 
 var _ acp.Agent = (*acpAgent)(nil)
@@ -73,6 +89,9 @@ func (a *acpAgent) Initialize(ctx context.Context, params acp.InitializeRequest)
 func (a *acpAgent) NewSession(ctx context.Context, params acp.NewSessionRequest) (acp.NewSessionResponse, error) {
 	sessionID := acp.SessionId(randomID("sess"))
 
+	// Create a cancellable context for this session
+	sessionCtx, sessionCancel := context.WithCancel(context.Background())
+
 	// Connect to MCP servers provided in the request
 	var mcpClients []*McpClient
 	for _, srv := range params.McpServers {
@@ -85,6 +104,7 @@ func (a *acpAgent) NewSession(ctx context.Context, params acp.NewSessionRequest)
 			for _, c := range mcpClients {
 				c.Close()
 			}
+			sessionCancel()
 			return acp.NewSessionResponse{}, fmt.Errorf("failed to create MCP client for %s: %w", srv.Http.Name, err)
 		}
 		if err := client.LoadTools(ctx); err != nil {
@@ -92,6 +112,7 @@ func (a *acpAgent) NewSession(ctx context.Context, params acp.NewSessionRequest)
 			for _, c := range mcpClients {
 				c.Close()
 			}
+			sessionCancel()
 			return acp.NewSessionResponse{}, fmt.Errorf("failed to load tools from MCP server %s: %w", srv.Http.Name, err)
 		}
 		mcpClients = append(mcpClients, client)
@@ -99,7 +120,9 @@ func (a *acpAgent) NewSession(ctx context.Context, params acp.NewSessionRequest)
 
 	a.mu.Lock()
 	a.sessions[sessionID] = &acpSession{
-		mcpClients: mcpClients,
+		ctx:           sessionCtx,
+		sessionCancel: sessionCancel,
+		mcpClients:    mcpClients,
 	}
 	a.mu.Unlock()
 
@@ -114,14 +137,14 @@ func (a *acpAgent) Authenticate(ctx context.Context, params acp.AuthenticateRequ
 // Cancel implements acp.Agent.
 func (a *acpAgent) Cancel(ctx context.Context, params acp.CancelNotification) error {
 	a.mu.Lock()
-	var cancel context.CancelFunc
-	if s := a.sessions[params.SessionId]; s != nil {
-		cancel = s.cancel
+	s := a.sessions[params.SessionId]
+	if s != nil {
+		delete(a.sessions, params.SessionId)
 	}
 	a.mu.Unlock()
 
-	if cancel != nil {
-		cancel()
+	if s != nil {
+		s.cleanup()
 	}
 	return nil
 }
@@ -143,28 +166,35 @@ func (a *acpAgent) Prompt(ctx context.Context, params acp.PromptRequest) (acp.Pr
 
 	// Cancel any previous turn
 	a.mu.Lock()
-	if s.cancel != nil {
-		cancelPrev := s.cancel
+	if s.promptCancel != nil {
+		cancelPrev := s.promptCancel
 		a.mu.Unlock()
 		cancelPrev()
 	} else {
 		a.mu.Unlock()
 	}
 
-	sessionCtx, cancel := context.WithCancel(ctx)
+	// Create a prompt context derived from the session context
+	promptCtx, promptCancel := context.WithCancel(s.ctx)
+
 	a.mu.Lock()
-	s.cancel = cancel
+	s.promptGen++
+	myGen := s.promptGen
+	s.promptCancel = promptCancel
 	a.mu.Unlock()
 
 	opts := a.buildRunOpts(params.Prompt, params.SessionId, s.mcpClients)
-	_, err := a.agent.runTask(sessionCtx, opts)
+	_, err := a.agent.runTask(promptCtx, opts)
 
+	// Only clear cancel if it's still ours (another Prompt may have started)
 	a.mu.Lock()
-	s.cancel = nil
+	if s.promptGen == myGen {
+		s.promptCancel = nil
+	}
 	a.mu.Unlock()
 
 	if err != nil {
-		if sessionCtx.Err() != nil {
+		if promptCtx.Err() != nil {
 			return acp.PromptResponse{StopReason: acp.StopReasonCancelled}, nil
 		}
 		return acp.PromptResponse{}, err
