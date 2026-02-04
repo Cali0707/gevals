@@ -64,12 +64,12 @@ func (r *Registry) WithExtensions(ctx context.Context, aliases map[string]string
 	return reg
 }
 
-func (r *Registry) Parse(cfg StepConfig) (StepRunner, error) {
-	if len(cfg) != 1 {
+func (r *Registry) Parse(cfg *StepConfig) (StepRunner, error) {
+	if cfg == nil || len(cfg.Config) != 1 {
 		return nil, fmt.Errorf("each step must have exactly one type")
 	}
 
-	for stepType, stepCfg := range cfg {
+	for stepType, stepCfg := range cfg.Config {
 		if strings.Contains(stepType, ".") {
 			return r.parsePrefix(stepType, stepCfg)
 		}

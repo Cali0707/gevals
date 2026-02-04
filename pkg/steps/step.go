@@ -40,7 +40,51 @@ type AgentContext struct {
 	Output string
 }
 
-type StepConfig map[string]json.RawMessage
+type StepConfig struct {
+	ID     string                     `json:"id"`
+	Config map[string]json.RawMessage `json:"_"`
+}
+
+func (cfg *StepConfig) UnmarshalJSON(data []byte) error {
+	type Alias StepConfig
+	tmp := &struct {
+		*Alias
+	}{
+		Alias: (*Alias)(cfg),
+	}
+
+	if err := json.Unmarshal(data, tmp); err != nil {
+		return err
+	}
+
+	var rawMap map[string]json.RawMessage
+	if err := json.Unmarshal(data, &rawMap); err != nil {
+		return err
+	}
+
+	delete(rawMap, "id")
+
+	cfg.Config = rawMap
+
+	return nil
+}
+
+func (cfg *StepConfig) MarshalJSON() ([]byte, error) {
+	rawMap := make(map[string]json.RawMessage, len(cfg.Config)+1)
+	for k, v := range cfg.Config {
+		rawMap[k] = v
+	}
+
+	if cfg.ID != "" {
+		idBytes, err := json.Marshal(cfg.ID)
+		if err != nil {
+			return nil, err
+		}
+		rawMap["id"] = idBytes
+	}
+
+	return json.Marshal(rawMap)
+}
 
 func init() {
 	DefaultRegistry.Register("http", ParseHttpStep)
