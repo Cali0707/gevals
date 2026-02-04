@@ -30,7 +30,7 @@ build: build-agent build-mcpchecker
 
 .PHONY: test
 test:
-	go test ./...
+	go test -count=1 -race ./...
 
 # Internal target - builds mock agent for functional tests
 .PHONY: _build-mock-agent
@@ -39,7 +39,7 @@ _build-mock-agent:
 
 .PHONY: functional
 functional: build _build-mock-agent ## Run functional tests
-	MCPCHECKER_BINARY=$(CURDIR)/mcpchecker MOCK_AGENT_BINARY=$(CURDIR)/$(MOCK_AGENT_BINARY_NAME) go test -v -tags functional ./functional/...
+	MCPCHECKER_BINARY=$(CURDIR)/mcpchecker MOCK_AGENT_BINARY=$(CURDIR)/$(MOCK_AGENT_BINARY_NAME) go test -v -count=1 -race -tags functional ./functional/...
 
 # Release targets for CI/CD
 .PHONY: build-release
