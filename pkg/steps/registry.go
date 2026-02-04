@@ -65,7 +65,7 @@ func (r *Registry) WithExtensions(ctx context.Context, aliases map[string]string
 }
 
 func (r *Registry) Parse(cfg *StepConfig) (StepRunner, error) {
-	if len(cfg.Config) != 1 {
+	if cfg == nil || len(cfg.Config) != 1 {
 		return nil, fmt.Errorf("each step must have exactly one type")
 	}
 
