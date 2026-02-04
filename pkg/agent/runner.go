@@ -52,8 +52,12 @@ func NewRunnerForSpec(spec *AgentSpec) (Runner, error) {
 
 	// Check if this is an OpenAI agent with builtin configuration
 	if spec.Builtin != nil && spec.Builtin.Type == "openai-agent" {
-		// Use the custom OpenAI agent runner
 		return NewOpenAIAgentRunner(spec.Builtin.Model, spec.Builtin.BaseURL, spec.Builtin.APIKey)
+	}
+
+	// Check if this is an OpenAI ACP agent with builtin configuration
+	if spec.Builtin != nil && spec.Builtin.Type == "openai-acp" {
+		return NewOpenAIACPRunner(spec.Builtin.Model, spec.Builtin.BaseURL, spec.Builtin.APIKey)
 	}
 
 	// Use the standard shell-based runner for all other agents
