@@ -124,7 +124,7 @@ runs:
 
     - name: Setup mcpchecker
       id: setup
-      uses: mcpchecker/mcpchecker/.github/actions/setup-mcpchecker@${{ github.action_ref || 'main' }}
+      uses: mcpchecker/mcpchecker/.github/actions/setup-mcpchecker@main
       with:
         version: ${{ steps.version.outputs.version }}
 
