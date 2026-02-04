@@ -13,6 +13,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+## [0.0.5]
+
+### Added
+- ACP (Agent Control Protocol) client library (#113)
+- ACP runner for agents (#134)
+- ACP support for builtin OpenAI agent (#164)
+- Template substitution in llmJudge steps (#170)
+- IDs for all task steps (#171)
+- Environment variable support for MCP configuration (#131)
+- 'as' alias support for task definitions (#140)
+
+### Changed
+- Timeout configuration on extension call steps (#169)
+- Refactored MCP client management to dedicated package for more reliable connections and lifecycle handling (#144)
+
+### Fixed
+- Mutex copy issue in protocol.Operation (#143)
+- Release workflows handle backticks in changelog (#137)
+
 ## [0.0.4]
 
 ### Added
