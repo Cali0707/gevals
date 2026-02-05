@@ -29,23 +29,23 @@ brew install mcpchecker
 ### Fedora / RHEL (dnf)
 
 ```bash
-# x86_64
-sudo dnf install https://github.com/mcpchecker/mcpchecker/releases/latest/download/mcpchecker_amd64.rpm
+# x86_64 (replace VERSION, e.g., 1.0.0)
+sudo dnf install https://github.com/mcpchecker/mcpchecker/releases/download/vVERSION/mcpchecker_VERSION_linux_amd64.rpm
 
 # arm64
-sudo dnf install https://github.com/mcpchecker/mcpchecker/releases/latest/download/mcpchecker_arm64.rpm
+sudo dnf install https://github.com/mcpchecker/mcpchecker/releases/download/vVERSION/mcpchecker_VERSION_linux_arm64.rpm
 ```
 
 ### Debian / Ubuntu (apt)
 
 ```bash
-# x86_64
-curl -LO https://github.com/mcpchecker/mcpchecker/releases/latest/download/mcpchecker_amd64.deb
-sudo apt install ./mcpchecker_amd64.deb
+# x86_64 (replace VERSION, e.g., 1.0.0)
+curl -LO https://github.com/mcpchecker/mcpchecker/releases/download/vVERSION/mcpchecker_VERSION_linux_amd64.deb
+sudo apt install ./mcpchecker_VERSION_linux_amd64.deb
 
 # arm64
-curl -LO https://github.com/mcpchecker/mcpchecker/releases/latest/download/mcpchecker_arm64.deb
-sudo apt install ./mcpchecker_arm64.deb
+curl -LO https://github.com/mcpchecker/mcpchecker/releases/download/vVERSION/mcpchecker_VERSION_linux_arm64.deb
+sudo apt install ./mcpchecker_VERSION_linux_arm64.deb
 ```
 
 ### Manual Download
