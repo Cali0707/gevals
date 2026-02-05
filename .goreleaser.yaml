@@ -1,0 +1,140 @@
+version: 2
+
+builds:
+  - id: mcpchecker
+    main: ./cmd/mcpchecker
+    binary: mcpchecker
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+
+  - id: agent
+    main: ./cmd/agent
+    binary: agent
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+
+archives:
+  - id: mcpchecker-archive
+    ids:
+      - mcpchecker
+    formats:
+      - zip
+    name_template: "mcpchecker-{{ .Os }}-{{ .Arch }}"
+
+  - id: agent-archive
+    ids:
+      - agent
+    formats:
+      - zip
+    name_template: "agent-{{ .Os }}-{{ .Arch }}"
+
+signs:
+  - cmd: cosign
+    signature: "${artifact}.bundle"
+    args:
+      - sign-blob
+      - --yes
+      - --bundle=${signature}
+      - ${artifact}
+    artifacts: archive
+
+checksum:
+  name_template: "checksums.txt"
+
+changelog:
+  use: github-native
+
+release:
+  github:
+    owner: Cali0707
+    name: mcpchecker
+  draft: false
+  prerelease: auto
+
+homebrew_casks:
+  - name: mcpchecker
+    ids:
+      - mcpchecker-archive
+    directory: Casks
+    repository:
+      owner: Cali0707
+      name: homebrew-mcpchecker
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    url:
+      verified: github.com/Cali0707/mcpchecker
+    homepage: https://github.com/Cali0707/mcpchecker
+    description: Integration testing framework for your MCP Servers and Agents
+    license: Apache-2.0
+    hooks:
+      post:
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/mcpchecker"]
+          end
+
+  - name: mcpchecker-agent
+    ids:
+      - agent-archive
+    directory: Casks
+    repository:
+      owner: Cali0707
+      name: homebrew-mcpchecker
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    url:
+      verified: github.com/Cali0707/mcpchecker
+    homepage: https://github.com/Cali0707/mcpchecker
+    description: Agent CLI for interacting with MCP servers
+    license: Apache-2.0
+    hooks:
+      post:
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/agent"]
+          end
+
+nfpms:
+  - id: mcpchecker-nfpm
+    package_name: mcpchecker
+    ids:
+      - mcpchecker
+    vendor: Cali0707
+    homepage: https://github.com/Cali0707/mcpchecker
+    maintainer: Cali0707
+    description: Integration testing framework for your MCP Servers and Agents
+    license: Apache-2.0
+    formats:
+      - rpm
+      - deb
+    bindir: /usr/bin
+
+  - id: agent-nfpm
+    package_name: mcpchecker-agent
+    ids:
+      - agent
+    vendor: Cali0707
+    homepage: https://github.com/Cali0707/mcpchecker
+    maintainer: Cali0707
+    description: Agent CLI for interacting with MCP servers
+    license: Apache-2.0
+    formats:
+      - rpm
+      - deb
+    bindir: /usr/bin
