@@ -1,0 +1,122 @@
+version: 2
+
+builds:
+  - id: mcpchecker
+    main: ./cmd/mcpchecker
+    binary: mcpchecker
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+
+  - id: agent
+    main: ./cmd/agent
+    binary: agent
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+
+archives:
+  - id: mcpchecker-archive
+    builds:
+      - mcpchecker
+    format: zip
+    name_template: "mcpchecker-{{ .Os }}-{{ .Arch }}"
+
+  - id: agent-archive
+    builds:
+      - agent
+    format: zip
+    name_template: "agent-{{ .Os }}-{{ .Arch }}"
+
+signs:
+  - cmd: cosign
+    signature: "${artifact}.bundle"
+    args:
+      - sign-blob
+      - --yes
+      - --bundle=${signature}
+      - ${artifact}
+    artifacts: archive
+
+checksum:
+  name_template: "checksums.txt"
+
+changelog:
+  use: github-native
+
+release:
+  github:
+    owner: Cali0707
+    name: mcpchecker
+  draft: false
+  prerelease: auto
+
+brews:
+  - name: mcpchecker
+    ids:
+      - mcpchecker-archive
+    repository:
+      owner: Cali0707
+      name: homebrew-mcpchecker
+    homepage: https://github.com/Cali0707/mcpchecker
+    description: Integration testing framework for your MCP Servers and Agents
+    license: Apache-2.0
+    install: |
+      bin.install "mcpchecker"
+
+  - name: mcpchecker-agent
+    ids:
+      - agent-archive
+    repository:
+      owner: Cali0707
+      name: homebrew-mcpchecker
+    homepage: https://github.com/mcpchecker/mcpchecker
+    description: Agent CLI for interacting with MCP servers
+    license: Apache-2.0
+    install: |
+      bin.install "agent"
+
+nfpms:
+  - id: mcpchecker-nfpm
+    package_name: mcpchecker
+    builds:
+      - mcpchecker
+    vendor: Cali0707
+    homepage: https://github.com/Cali0707/mcpchecker
+    maintainer: Cali0707
+    description: Integration testing framework for your MCP Servers and Agents
+    license: Apache-2.0
+    formats:
+      - rpm
+      - deb
+    bindir: /usr/bin
+
+  - id: agent-nfpm
+    package_name: mcpchecker-agent
+    builds:
+      - agent
+    vendor: Cali0707
+    homepage: https://github.com/Cali0707/mcpchecker
+    maintainer: Cali0707
+    description: Agent CLI for interacting with MCP servers
+    license: Apache-2.0
+    formats:
+      - rpm
+      - deb
+    bindir: /usr/bin
