@@ -11,17 +11,14 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  check-and-create-nightly:
+  nightly:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-    outputs:
-      nightly_version: ${{ env.NIGHTLY_VERSION }}
-      skip_nightly: ${{ env.SKIP_NIGHTLY }}
-      changelog_body: ${{ env.CHANGELOG_BODY }}
+      id-token: write
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
         with:
           fetch-depth: 0
 
@@ -34,18 +31,16 @@ jobs:
           if [ -z "$LATEST_RELEASE" ]; then
             echo "No existing releases found, creating first nightly"
             COMMITS_SINCE_RELEASE=$(git rev-list HEAD --count)
-            LATEST_RELEASE_COMMIT=""
           else
             echo "Latest release: $LATEST_RELEASE"
             COMMITS_SINCE_RELEASE=$(git rev-list ${LATEST_RELEASE}..HEAD --count)
-            LATEST_RELEASE_COMMIT="$LATEST_RELEASE"
           fi
 
           echo "Commits since latest release: $COMMITS_SINCE_RELEASE"
 
           if [ "$COMMITS_SINCE_RELEASE" -eq "0" ]; then
             echo "No new commits since latest release, skipping nightly"
-            echo "SKIP_NIGHTLY=true" >> "$GITHUB_ENV"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
@@ -59,31 +54,14 @@ jobs:
 
           if [ "$EXISTING_NIGHTLY_COMMIT" = "$CURRENT_COMMIT" ]; then
             echo "Nightly release already exists for current commit"
-            echo "SKIP_NIGHTLY=true" >> "$GITHUB_ENV"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
-          # Use fixed nightly tag name
-          NIGHTLY_VERSION="nightly"
-          echo "NIGHTLY_VERSION=$NIGHTLY_VERSION" >> "$GITHUB_ENV"
-          echo "Creating nightly release: $NIGHTLY_VERSION"
-
-      - name: Extract changelog for nightly
-        id: changelog
-        if: env.SKIP_NIGHTLY != 'true'
-        run: |
-          # Extract the Unreleased section from CHANGELOG.md using make target
-          CHANGELOG_CONTENT=$(make extract-changelog-unreleased)
-
-          # Save to environment variable, handling multiline content
-          {
-            echo 'CHANGELOG_BODY<<EOF'
-            echo "$CHANGELOG_CONTENT"
-            echo 'EOF'
-          } >> "$GITHUB_ENV"
+          echo "skip=false" >> "$GITHUB_OUTPUT"
 
       - name: Delete existing nightly release and tag
-        if: env.SKIP_NIGHTLY != 'true'
+        if: steps.check_commits.outputs.skip != 'true'
         run: |
           # Delete existing nightly release if it exists
           if gh release view nightly >/dev/null 2>&1; then
@@ -104,56 +82,46 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Create nightly release
-        if: env.SKIP_NIGHTLY != 'true'
+        if: steps.check_commits.outputs.skip != 'true'
         run: |
-          VERSION="${{ env.NIGHTLY_VERSION }}"
           CURRENT_DATE=$(date -u +%Y-%m-%d)
           SHORT_COMMIT=$(git rev-parse --short HEAD)
 
-          echo "Creating nightly release: $VERSION"
-          gh release create "$VERSION" \
+          echo "Creating nightly release"
+          gh release create nightly \
             --title "Nightly Release ($CURRENT_DATE - $SHORT_COMMIT)" \
-            --notes "${{ env.CHANGELOG_BODY }}" \
+            --generate-notes \
             --prerelease
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  build-and-upload:
-    needs: check-and-create-nightly
-    if: needs.check-and-create-nightly.outputs.skip_nightly != 'true'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      id-token: write  # Permission for keyless signing
-    strategy:
-      matrix:
-        goos: [linux, windows, darwin]
-        goarch: [amd64, arm64]
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v6
-
       - name: Set up Go
-        uses: actions/setup-go@v6
+        if: steps.check_commits.outputs.skip != 'true'
+        uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5  # v6
         with:
           go-version-file: 'go.mod'
 
       - name: Install cosign
-        uses: sigstore/cosign-installer@v4.0.0
+        if: steps.check_commits.outputs.skip != 'true'
+        uses: sigstore/cosign-installer@f713795cb21599bc4e5c4b58cbad1da852d7eeb9  # v3
 
-      - name: Build release artifacts
+      - name: Run GoReleaser (snapshot)
+        if: steps.check_commits.outputs.skip != 'true'
+        uses: goreleaser/goreleaser-action@e435ccd777264be153ace6237001ef4d979d3a7a  # v6
+        with:
+          distribution: goreleaser
+          version: '~> v2'
+          args: release --snapshot --clean --skip=homebrew_casks,publish
         env:
-          GOOS: ${{ matrix.goos }}
-          GOARCH: ${{ matrix.goarch }}
-        run: make build-release package-release
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Sign release artifacts
-        env:
-          GOOS: ${{ matrix.goos }}
-          GOARCH: ${{ matrix.goarch }}
-        run: make sign-release
-
-      - name: Upload assets to nightly release
-        run: make upload-release-assets VERSION="${{ needs.check-and-create-nightly.outputs.nightly_version }}"
+      - name: Upload artifacts to nightly release
+        if: steps.check_commits.outputs.skip != 'true'
+        run: |
+          gh release upload nightly dist/*.zip --clobber
+          gh release upload nightly dist/*.bundle --clobber
+          gh release upload nightly dist/*.deb --clobber
+          gh release upload nightly dist/*.rpm --clobber
+          gh release upload nightly dist/checksums.txt --clobber
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
