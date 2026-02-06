@@ -19,30 +19,58 @@ Think of it as integration testing for AI tool use.
 
 ## Installation
 
+### Homebrew (macOS)
+
+```bash
+brew tap mcpchecker/mcpchecker
+brew install mcpchecker
+```
+
+### Fedora / RHEL (dnf)
+
+```bash
+# x86_64 (replace VERSION, e.g., 1.0.0)
+sudo dnf install https://github.com/mcpchecker/mcpchecker/releases/download/vVERSION/mcpchecker_VERSION_linux_amd64.rpm
+
+# arm64
+sudo dnf install https://github.com/mcpchecker/mcpchecker/releases/download/vVERSION/mcpchecker_VERSION_linux_arm64.rpm
+```
+
+### Debian / Ubuntu (apt)
+
+```bash
+# x86_64 (replace VERSION, e.g., 1.0.0)
+curl -LO https://github.com/mcpchecker/mcpchecker/releases/download/vVERSION/mcpchecker_VERSION_linux_amd64.deb
+sudo apt install ./mcpchecker_VERSION_linux_amd64.deb
+
+# arm64
+curl -LO https://github.com/mcpchecker/mcpchecker/releases/download/vVERSION/mcpchecker_VERSION_linux_arm64.deb
+sudo apt install ./mcpchecker_VERSION_linux_arm64.deb
+```
+
+### Manual Download
+
 Download the latest release from [GitHub Releases](https://github.com/mcpchecker/mcpchecker/releases):
 
-**Linux (amd64):**
 ```bash
-curl -L -o mcpchecker https://github.com/mcpchecker/mcpchecker/releases/latest/download/mcpchecker-linux-amd64
-chmod +x mcpchecker
+# Linux (amd64)
+curl -L -o mcpchecker.zip https://github.com/mcpchecker/mcpchecker/releases/latest/download/mcpchecker-linux-amd64.zip
+unzip mcpchecker.zip
+sudo mv mcpchecker /usr/local/bin/
+
+# macOS (Apple Silicon)
+curl -L -o mcpchecker.zip https://github.com/mcpchecker/mcpchecker/releases/latest/download/mcpchecker-darwin-arm64.zip
+unzip mcpchecker.zip
+sudo mv mcpchecker /usr/local/bin/
+
+# macOS (Intel)
+curl -L -o mcpchecker.zip https://github.com/mcpchecker/mcpchecker/releases/latest/download/mcpchecker-darwin-amd64.zip
+unzip mcpchecker.zip
 sudo mv mcpchecker /usr/local/bin/
 ```
 
-**macOS (arm64 - Apple Silicon):**
-```bash
-curl -L -o mcpchecker https://github.com/mcpchecker/mcpchecker/releases/latest/download/mcpchecker-darwin-arm64
-chmod +x mcpchecker
-sudo mv mcpchecker /usr/local/bin/
-```
+### Verify Installation
 
-**macOS (amd64 - Intel):**
-```bash
-curl -L -o mcpchecker https://github.com/mcpchecker/mcpchecker/releases/latest/download/mcpchecker-darwin-amd64
-chmod +x mcpchecker
-sudo mv mcpchecker /usr/local/bin/
-```
-
-Verify installation:
 ```bash
 mcpchecker --version
 ```
