@@ -2,12 +2,10 @@ package agent
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 
-	"github.com/coder/acp-go-sdk"
 	"github.com/mcpchecker/mcpchecker/pkg/acpclient"
 	"github.com/mcpchecker/mcpchecker/pkg/mcpproxy"
 	"github.com/mcpchecker/mcpchecker/pkg/openaiagent"
@@ -80,34 +78,16 @@ func (r *openAIACPRunner) RunTask(ctx context.Context, prompt string) (AgentResu
 	// Only defer Close after successful Start - Start handles its own cleanup on failure
 	defer client.Close(ctx)
 
-	updates, err := client.Run(ctx, prompt, r.mcpServers)
+	result, err := client.RunWithUsage(ctx, prompt, r.mcpServers)
 	if err != nil {
 		return nil, fmt.Errorf("failed to run ACP agent: %w", err)
 	}
 
-	return &openAIACPResult{updates: updates}, nil
-}
-
-type openAIACPResult struct {
-	updates []acp.SessionUpdate
-}
-
-func (res *openAIACPResult) GetOutput() string {
-	if len(res.updates) == 0 {
-		return "got no output from acp agent"
-	}
-
-	out, err := json.Marshal(res.updates)
-	if err != nil {
-		lastUpdate := res.updates[len(res.updates)-1]
-		if lastUpdate.AgentMessageChunk != nil &&
-			lastUpdate.AgentMessageChunk.Content.Text != nil {
-			return lastUpdate.AgentMessageChunk.Content.Text.Text
-		}
-		return "unable to get agent output from last acp update"
-	}
-
-	return string(out)
+	return &acpResult{
+		updates:     result.Updates,
+		prompt:      prompt,
+		actualUsage: result.Usage,
+	}, nil
 }
 
 // openAIACPTransport implements acpclient.Transport using in-memory pipes

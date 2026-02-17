@@ -2,10 +2,8 @@ package agent
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 
-	"github.com/coder/acp-go-sdk"
 	"github.com/mcpchecker/mcpchecker/pkg/acpclient"
 	"github.com/mcpchecker/mcpchecker/pkg/mcpproxy"
 )
@@ -34,13 +32,15 @@ func (r *acpRunner) RunTask(ctx context.Context, prompt string) (AgentResult, er
 		return nil, fmt.Errorf("failed to start acp client: %w", err)
 	}
 
-	result, err := client.Run(ctx, prompt, r.mcpServers)
+	result, err := client.RunWithUsage(ctx, prompt, r.mcpServers)
 	if err != nil {
 		return nil, fmt.Errorf("failed to run acp agent: %w", err)
 	}
 
-	return &acpRunnerResult{
-		updates: result,
+	return &acpResult{
+		updates:     result.Updates,
+		prompt:      prompt,
+		actualUsage: result.Usage,
 	}, nil
 }
 
@@ -54,28 +54,4 @@ func (r *acpRunner) WithMcpServerInfo(mcpServers mcpproxy.ServerManager) Runner 
 
 func (r *acpRunner) AgentName() string {
 	return r.name
-}
-
-type acpRunnerResult struct {
-	updates []acp.SessionUpdate
-}
-
-var _ AgentResult = &acpRunnerResult{}
-
-func (res *acpRunnerResult) GetOutput() string {
-	if len(res.updates) == 0 {
-		return "got no output from acp agent"
-	}
-
-	out, err := json.Marshal(res.updates)
-	if err != nil {
-		text := res.updates[len(res.updates)-1].AgentMessageChunk.Content.Text
-		if text != nil {
-			return text.Text
-		}
-
-		return "unable to get agent output from last acp update"
-	}
-
-	return string(out)
 }
