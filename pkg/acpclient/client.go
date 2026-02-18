@@ -197,7 +197,7 @@ func (c *client) startSubprocess(ctx context.Context) (io.Writer, io.Reader, err
 }
 
 func (c *client) closeSubprocess(ctx context.Context) error {
-	if c.cmd == nil || (c.cmd.ProcessState != nil && c.cmd.ProcessState.Exited()) {
+	if c.cmd == nil || c.cmd.Process == nil || (c.cmd.ProcessState != nil && c.cmd.ProcessState.Exited()) {
 		return nil
 	}
 
