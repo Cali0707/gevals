@@ -329,6 +329,21 @@ func (r *evalRunner) runTask(
 
 	result.CallHistory = manager.GetAllCallHistory()
 
+	// Compute per-call token counts on CallHistory records
+	_ = mcpproxy.ComputeCallHistoryTokens(result.CallHistory)
+
+	// Compute MCP schema overhead (tool definitions + server instructions)
+	schemaTokens, _ := mcpproxy.ComputeSchemaTokens(ctx, manager.GetMcpServers())
+
+	// Ensure TokenEstimate exists so MCP token data is always reported,
+	// even on agent failure or shell runner
+	if result.TokenEstimate == nil {
+		result.TokenEstimate = &agent.TokenEstimate{}
+	}
+	result.TokenEstimate.McpSchemaTokens = schemaTokens
+	result.TokenEstimate.MergeCallHistory(result.CallHistory)
+	result.TokenEstimate.RecalculateAggregates()
+
 	r.progressCallback(ProgressEvent{
 		Type:    EventTaskComplete,
 		Message: fmt.Sprintf("Completed task: %s (passed: %v)", tc.spec.Metadata.Name, result.TaskPassed),

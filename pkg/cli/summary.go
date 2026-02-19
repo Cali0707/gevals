@@ -12,25 +12,27 @@ import (
 )
 
 type SummaryOutput struct {
-	ResultsFile         string        `json:"resultsFile"`
-	Tasks               []TaskSummary `json:"tasks"`
-	TasksTotal          int           `json:"tasksTotal"`
-	TasksPassed         int           `json:"tasksPassed"`
-	TaskPassRate        float64       `json:"taskPassRate"`
-	AssertionsTotal     int           `json:"assertionsTotal"`
-	AssertionsPassed    int           `json:"assertionsPassed"`
-	AssertionPassRate   float64       `json:"assertionPassRate"`
-	TotalTokensEstimate int64         `json:"totalTokensEstimate"`
+	ResultsFile            string        `json:"resultsFile"`
+	Tasks                  []TaskSummary `json:"tasks"`
+	TasksTotal             int           `json:"tasksTotal"`
+	TasksPassed            int           `json:"tasksPassed"`
+	TaskPassRate           float64       `json:"taskPassRate"`
+	AssertionsTotal        int           `json:"assertionsTotal"`
+	AssertionsPassed       int           `json:"assertionsPassed"`
+	AssertionPassRate      float64       `json:"assertionPassRate"`
+	TotalTokensEstimate    int64         `json:"totalTokensEstimate"`
+	TotalMcpSchemaTokens   int64         `json:"totalMcpSchemaTokens"`
 }
 
 type TaskSummary struct {
-	Name             string   `json:"name"`
-	TaskPassed       bool     `json:"taskPassed"`
-	AssertionsPassed bool     `json:"assertionsPassed"`
-	TaskError        string   `json:"taskError,omitempty"`
-	FailedAssertions []string `json:"failedAssertions,omitempty"`
-	TokensEstimated  int64    `json:"tokensEstimated,omitempty"`
-	TokenError       string   `json:"tokenError,omitempty"`
+	Name              string   `json:"name"`
+	TaskPassed        bool     `json:"taskPassed"`
+	AssertionsPassed  bool     `json:"assertionsPassed"`
+	TaskError         string   `json:"taskError,omitempty"`
+	FailedAssertions  []string `json:"failedAssertions,omitempty"`
+	TokensEstimated   int64    `json:"tokensEstimated,omitempty"`
+	McpSchemaTokens   int64    `json:"mcpSchemaTokens,omitempty"`
+	TokenError        string   `json:"tokenError,omitempty"`
 }
 
 func NewSummaryCmd() *cobra.Command {
@@ -128,8 +130,10 @@ func buildSummaryOutput(resultsFile string, evalResults []*eval.EvalResult) Summ
 		// Collect token estimates
 		if result.TokenEstimate != nil {
 			taskSummary.TokensEstimated = result.TokenEstimate.TotalTokens
+			taskSummary.McpSchemaTokens = result.TokenEstimate.McpSchemaTokens
 			taskSummary.TokenError = result.TokenEstimate.Error
 			summary.TotalTokensEstimate += result.TokenEstimate.TotalTokens
+			summary.TotalMcpSchemaTokens += result.TokenEstimate.McpSchemaTokens
 		}
 
 		summary.Tasks = append(summary.Tasks, taskSummary)
@@ -214,6 +218,9 @@ func outputTextSummary(evalResults []*eval.EvalResult, summary SummaryOutput) {
 		} else {
 			fmt.Printf("Tokens:     ~%d (estimate - excludes system prompt & cache)\n", summary.TotalTokensEstimate)
 		}
+		if summary.TotalMcpSchemaTokens > 0 {
+			fmt.Printf("MCP schemas: ~%d (included in token total)\n", summary.TotalMcpSchemaTokens)
+		}
 	}
 }
 
@@ -232,4 +239,5 @@ func outputGitHubSummary(summary SummaryOutput) {
 	fmt.Printf("assertions-passed=%d\n", summary.AssertionsPassed)
 	fmt.Printf("assertion-pass-rate=%.4f\n", summary.AssertionPassRate)
 	fmt.Printf("tokens-estimated=%d\n", summary.TotalTokensEstimate)
+	fmt.Printf("mcp-schema-tokens=%d\n", summary.TotalMcpSchemaTokens)
 }

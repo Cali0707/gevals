@@ -1,6 +1,7 @@
 package tokenizer
 
 import (
+	"encoding/json"
 	"sync"
 
 	"github.com/pkoukk/tiktoken-go"
@@ -18,6 +19,7 @@ type tokenizer struct {
 // Tokenizer is the public interface for token counting.
 type Tokenizer interface {
 	CountTokens(text string) (int, error)
+	CountJSONTokens(v any) (int, error)
 }
 
 var (
@@ -71,6 +73,15 @@ func (t *tokenizer) CountTokens(text string) (int, error) {
 	}
 	tokens := t.enc.Encode(text, nil, nil)
 	return len(tokens), nil
+}
+
+// CountJSONTokens marshals v to JSON and counts the tokens.
+func (t *tokenizer) CountJSONTokens(v any) (int, error) {
+	data, err := json.Marshal(v)
+	if err != nil {
+		return 0, err
+	}
+	return t.CountTokens(string(data))
 }
 
 // EstimateTokens is a convenience function that uses the default tokenizer
