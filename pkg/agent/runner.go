@@ -362,6 +362,12 @@ func NewRunnerForSpec(spec *AgentSpec) (Runner, error) {
 
 	// Check if this is an OpenAI agent with builtin configuration
 	if spec.Builtin != nil && spec.Builtin.Type == "openai-agent" {
+		fmt.Fprintf(os.Stderr, "\nWARNING: The \"openai-agent\" agent type is deprecated and will be removed in the next release.\n"+
+			"  Migrate to \"openai-acp\" by changing the agent type in your config:\n"+
+			"    - In eval config: type: \"builtin.openai-acp\"\n"+
+			"    - In agent YAML: type: \"openai-acp\"\n"+
+			"  Both types use the same MODEL_BASE_URL and MODEL_KEY environment variables.\n"+
+			"  The \"openai-acp\" agent also provides token estimation and structured tool call tracking.\n\n")
 		return NewOpenAIAgentRunner(spec.Builtin.Model, spec.Builtin.BaseURL, spec.Builtin.APIKey)
 	}
 
