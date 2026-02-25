@@ -210,18 +210,25 @@ func ComputeTokenEstimate(prompt, message, thinking string, toolCalls []ToolCall
 	var toolInputTokens, toolOutputTokens int64
 	for i, tc := range toolCalls {
 		// Tool call parameters: agent -> tools (OUTPUT - agent generates these)
-		if count, err := tok.CountJSONTokens(tc.RawInput); err != nil {
-			log.Printf("Warning: failed to count tool call input [%d] %q: %v", i, tc.Title, err)
-			errors = append(errors, "tool_calls")
-		} else {
-			toolInputTokens += int64(count)
+		// Skip nil values (e.g. ACP agent didn't send rawInput) to avoid
+		// json.Marshal(nil) → "null" → 1 bogus token that would also prevent
+		// MergeCallHistory from using the real MCP proxy counts.
+		if tc.RawInput != nil {
+			if count, err := tok.CountJSONTokens(tc.RawInput); err != nil {
+				log.Printf("Warning: failed to count tool call input [%d] %q: %v", i, tc.Title, err)
+				errors = append(errors, "tool_calls")
+			} else {
+				toolInputTokens += int64(count)
+			}
 		}
 		// Tool results: tools -> agent (INPUT - these go back into agent context)
-		if count, err := tok.CountJSONTokens(tc.RawOutput); err != nil {
-			log.Printf("Warning: failed to count tool result output [%d] %q: %v", i, tc.Title, err)
-			errors = append(errors, "tool_results")
-		} else {
-			toolOutputTokens += int64(count)
+		if tc.RawOutput != nil {
+			if count, err := tok.CountJSONTokens(tc.RawOutput); err != nil {
+				log.Printf("Warning: failed to count tool result output [%d] %q: %v", i, tc.Title, err)
+				errors = append(errors, "tool_results")
+			} else {
+				toolOutputTokens += int64(count)
+			}
 		}
 	}
 

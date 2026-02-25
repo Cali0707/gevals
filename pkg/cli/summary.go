@@ -204,30 +204,37 @@ func outputTextSummary(evalResults []*eval.EvalResult, summary SummaryOutput) {
 		summary.TasksPassed, summary.TasksTotal, summary.TaskPassRate*100)
 	fmt.Printf("Assertions: %d/%d passed (%.2f%%)\n",
 		summary.AssertionsPassed, summary.AssertionsTotal, summary.AssertionPassRate*100)
-	if summary.TotalTokensEstimate > 0 {
-		// Check if any task had token errors
-		hasTokenErrors := false
-		for _, task := range summary.Tasks {
-			if task.TokenError != "" {
-				hasTokenErrors = true
-				break
-			}
-		}
-		if hasTokenErrors {
-			fmt.Printf("Tokens:     ~%d (incomplete - some counts failed)\n", summary.TotalTokensEstimate)
-		} else {
-			fmt.Printf("Tokens:     ~%d (estimate - excludes system prompt & cache)\n", summary.TotalTokensEstimate)
-		}
-		if summary.TotalMcpSchemaTokens > 0 {
-			fmt.Printf("MCP schemas: ~%d (included in token total)\n", summary.TotalMcpSchemaTokens)
+	// Check if any task had token errors
+	hasTokenErrors := false
+	for _, task := range summary.Tasks {
+		if task.TokenError != "" {
+			hasTokenErrors = true
+			break
 		}
 	}
+	printTokenSummary(summary.TotalTokensEstimate, summary.TotalMcpSchemaTokens, hasTokenErrors)
 }
 
 func outputJSONSummary(summary SummaryOutput) error {
 	encoder := json.NewEncoder(os.Stdout)
 	encoder.SetIndent("", "  ")
 	return encoder.Encode(summary)
+}
+
+// printTokenSummary prints a token count summary to stdout.
+// Used by both the check and summary commands.
+func printTokenSummary(totalTokens, mcpSchemaTokens int64, hasErrors bool) {
+	if totalTokens <= 0 {
+		return
+	}
+	if hasErrors {
+		fmt.Printf("Tokens:     ~%d (incomplete - some counts failed)\n", totalTokens)
+	} else {
+		fmt.Printf("Tokens:     ~%d (estimate - excludes system prompt & cache)\n", totalTokens)
+	}
+	if mcpSchemaTokens > 0 {
+		fmt.Printf("MCP schemas: ~%d (included in token total)\n", mcpSchemaTokens)
+	}
 }
 
 func outputGitHubSummary(summary SummaryOutput) {
