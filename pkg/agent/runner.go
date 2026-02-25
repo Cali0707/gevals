@@ -268,12 +268,16 @@ func (e *TokenEstimate) MergeCallHistory(history *mcpproxy.CallHistory) {
 		return
 	}
 
-	// For tool I/O: skip if already populated by ComputeTokenEstimate (ACP mode)
-	if e.ToolInputTokens == 0 && e.ToolOutputTokens == 0 {
+	// For tool I/O: skip each field independently if already populated (ACP mode)
+	if e.ToolInputTokens == 0 || e.ToolOutputTokens == 0 {
 		for _, tc := range history.ToolCalls {
 			if tc.Tokens != nil {
-				e.ToolInputTokens += tc.Tokens.InputTokens
-				e.ToolOutputTokens += tc.Tokens.OutputTokens
+				if e.ToolInputTokens == 0 {
+					e.ToolInputTokens += tc.Tokens.InputTokens
+				}
+				if e.ToolOutputTokens == 0 {
+					e.ToolOutputTokens += tc.Tokens.OutputTokens
+				}
 			}
 		}
 	}
