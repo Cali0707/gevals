@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/genmcp/gen-mcp/pkg/template"
 	"github.com/mcpchecker/mcpchecker/pkg/agent"
 	"github.com/mcpchecker/mcpchecker/pkg/extension/client"
 	"github.com/mcpchecker/mcpchecker/pkg/mcpclient"
@@ -14,10 +15,10 @@ import (
 
 // AgentDetails captures structured information from the agent execution.
 type AgentDetails struct {
-	TokenEstimate *agent.TokenEstimate  `json:"tokenEstimate,omitempty"`
+	TokenEstimate *agent.TokenEstimate    `json:"tokenEstimate,omitempty"`
 	ToolCalls     []agent.ToolCallSummary `json:"toolCalls,omitempty"`
-	FinalMessage  string                `json:"finalMessage,omitempty"`
-	Thinking      string                `json:"thinking,omitempty"`
+	FinalMessage  string                  `json:"finalMessage,omitempty"`
+	Thinking      string                  `json:"thinking,omitempty"`
 }
 
 // PhaseOutput represents the output from a task phase (setup, agent, verify, or cleanup).
@@ -52,6 +53,9 @@ type taskRunner struct {
 	prompt  string
 	output  string
 	baseDir string
+
+	setupOutputs map[string]map[string]string
+	random       *steps.RandomResolver
 }
 
 func NewTaskRunner(ctx context.Context, cfg *TaskConfig) (TaskRunner, error) {
@@ -65,6 +69,7 @@ func NewTaskRunner(ctx context.Context, cfg *TaskConfig) (TaskRunner, error) {
 		verify:  make([]steps.StepRunner, len(cfg.Spec.Verify)),
 		cleanup: make([]steps.StepRunner, len(cfg.Spec.Cleanup)),
 		baseDir: cfg.basePath,
+		random:  steps.NewRandomResolver(),
 	}
 
 	extensionManager, ok := client.ManagerFromContext(ctx)
@@ -196,6 +201,7 @@ func (r *taskRunner) Setup(ctx context.Context) (*PhaseOutput, error) {
 		res, err := s.Execute(ctx, &steps.StepInput{
 			Workdir:     r.baseDir,
 			StepOutputs: stepOutputs,
+			Random:      r.random,
 		})
 
 		out.Steps = append(out.Steps, res)
@@ -214,6 +220,8 @@ func (r *taskRunner) Setup(ctx context.Context) (*PhaseOutput, error) {
 		}
 	}
 
+	r.setupOutputs = stepOutputs
+
 	return out, nil
 }
 
@@ -223,12 +231,18 @@ func (r *taskRunner) Cleanup(ctx context.Context) (*PhaseOutput, error) {
 		Success: true,
 	}
 
+	// Seed cleanup step outputs with setup outputs so cleanup steps
+	// can reference values produced during setup (e.g. generated namespace names).
 	stepOutputs := make(map[string]map[string]string)
+	for k, v := range r.setupOutputs {
+		stepOutputs[k] = v
+	}
 
 	for i, s := range r.cleanup {
 		res, err := s.Execute(ctx, &steps.StepInput{
 			Workdir:     r.baseDir,
 			StepOutputs: stepOutputs,
+			Random:      r.random,
 		})
 
 		out.Steps = append(out.Steps, res)
@@ -250,7 +264,48 @@ func (r *taskRunner) Cleanup(ctx context.Context) (*PhaseOutput, error) {
 	return out, nil
 }
 
+// resolvePromptTemplates resolves {steps.*} template variables in the prompt
+// using outputs collected during setup. Returns the original prompt if no
+// templates are present or if resolution fails.
+func (r *taskRunner) resolvePromptTemplates(prompt string) string {
+	if len(r.setupOutputs) == 0 || !strings.Contains(prompt, "{steps.") {
+		return prompt
+	}
+
+	sources := map[string]template.SourceFactory{
+		"steps": template.NewSourceFactory("steps"),
+	}
+
+	parsed, err := template.ParseTemplate(prompt, template.TemplateParserOptions{
+		Sources: sources,
+	})
+	if err != nil {
+		return prompt
+	}
+
+	builder, err := template.NewTemplateBuilder(parsed, false)
+	if err != nil {
+		return prompt
+	}
+
+	resolver := steps.NewStepOutputResolver(r.setupOutputs)
+	builder.SetSourceResolver("steps", resolver)
+
+	result, err := builder.GetResult()
+	if err != nil {
+		return prompt
+	}
+
+	str, ok := result.(string)
+	if !ok {
+		return prompt
+	}
+
+	return str
+}
+
 func (r *taskRunner) RunAgent(ctx context.Context, agentRunner agent.Runner) (*PhaseOutput, error) {
+	r.prompt = r.resolvePromptTemplates(r.prompt)
 	result, err := agentRunner.RunTask(ctx, r.prompt)
 	if err != nil {
 		detailErr := fmt.Errorf("failed to run agent: %w", err)
@@ -310,6 +365,7 @@ func (r *taskRunner) Verify(ctx context.Context) (*PhaseOutput, error) {
 			},
 			Workdir:     r.baseDir,
 			StepOutputs: stepOutputs,
+			Random:      r.random,
 		})
 
 		out.Steps = append(out.Steps, res)

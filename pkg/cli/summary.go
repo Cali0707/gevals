@@ -22,6 +22,10 @@ type SummaryOutput struct {
 	AssertionPassRate      float64       `json:"assertionPassRate"`
 	TotalTokensEstimate    int64         `json:"totalTokensEstimate"`
 	TotalMcpSchemaTokens   int64         `json:"totalMcpSchemaTokens"`
+	AgentTotalInputTokens  int64         `json:"agentTotalInputTokens"`
+	AgentTotalOutputTokens int64         `json:"agentTotalOutputTokens"`
+	JudgeTotalInputTokens  int64         `json:"judgeTotalInputTokens"`
+	JudgeTotalOutputTokens int64         `json:"judgeTotalOutputTokens"`
 }
 
 type TaskSummary struct {
@@ -33,6 +37,10 @@ type TaskSummary struct {
 	TokensEstimated   int64    `json:"tokensEstimated,omitempty"`
 	McpSchemaTokens   int64    `json:"mcpSchemaTokens,omitempty"`
 	TokenError        string   `json:"tokenError,omitempty"`
+	AgentInputTokens  int64    `json:"agentInputTokens"`
+	AgentOutputTokens int64    `json:"agentOutputTokens"`
+	JudgeInputTokens  int64    `json:"judgeInputTokens"`
+	JudgeOutputTokens int64    `json:"judgeOutputTokens"`
 }
 
 func NewSummaryCmd() *cobra.Command {
@@ -136,6 +144,24 @@ func buildSummaryOutput(resultsFile string, evalResults []*eval.EvalResult) Summ
 			summary.TotalMcpSchemaTokens += result.TokenEstimate.McpSchemaTokens
 		}
 
+		// Collect actual token usage
+		if result.TokenEstimate != nil && result.TokenEstimate.Actual != nil {
+			actualTokenUsage := result.TokenEstimate.Actual
+
+			taskSummary.AgentInputTokens = actualTokenUsage.InputTokens
+			taskSummary.AgentOutputTokens = actualTokenUsage.OutputTokens
+			summary.AgentTotalInputTokens += actualTokenUsage.InputTokens
+			summary.AgentTotalOutputTokens += actualTokenUsage.OutputTokens
+		}
+
+		// Collect judge token usage
+		if result.JudgeTokenUsage != nil {
+			taskSummary.JudgeInputTokens = result.JudgeTokenUsage.InputTokens
+			taskSummary.JudgeOutputTokens = result.JudgeTokenUsage.OutputTokens
+			summary.JudgeTotalInputTokens += result.JudgeTokenUsage.InputTokens
+			summary.JudgeTotalOutputTokens += result.JudgeTokenUsage.OutputTokens
+		}
+
 		summary.Tasks = append(summary.Tasks, taskSummary)
 	}
 
@@ -213,6 +239,18 @@ func outputTextSummary(evalResults []*eval.EvalResult, summary SummaryOutput) {
 		}
 	}
 	printTokenSummary(summary.TotalTokensEstimate, summary.TotalMcpSchemaTokens, hasTokenErrors)
+
+	if summary.AgentTotalInputTokens > 0 || summary.AgentTotalOutputTokens > 0 {
+		fmt.Printf("Agent used tokens:\n")
+		fmt.Printf("  Input:  %d tokens\n", summary.AgentTotalInputTokens)
+		fmt.Printf("  Output: %d tokens\n", summary.AgentTotalOutputTokens)
+	}
+
+	if summary.JudgeTotalInputTokens > 0 || summary.JudgeTotalOutputTokens > 0 {
+		fmt.Printf("Judge used tokens:\n")
+		fmt.Printf("  Input:  %d tokens\n", summary.JudgeTotalInputTokens)
+		fmt.Printf("  Output: %d tokens\n", summary.JudgeTotalOutputTokens)
+	}
 }
 
 func outputJSONSummary(summary SummaryOutput) error {
@@ -247,4 +285,8 @@ func outputGitHubSummary(summary SummaryOutput) {
 	fmt.Printf("assertion-pass-rate=%.4f\n", summary.AssertionPassRate)
 	fmt.Printf("tokens-estimated=%d\n", summary.TotalTokensEstimate)
 	fmt.Printf("mcp-schema-tokens=%d\n", summary.TotalMcpSchemaTokens)
+	fmt.Printf("agent-input-tokens=%d\n", summary.AgentTotalInputTokens)
+	fmt.Printf("agent-output-tokens=%d\n", summary.AgentTotalOutputTokens)
+	fmt.Printf("judge-input-tokens=%d\n", summary.JudgeTotalInputTokens)
+	fmt.Printf("judge-output-tokens=%d\n", summary.JudgeTotalOutputTokens)
 }
