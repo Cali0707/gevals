@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"regexp"
+	"strings"
 
 	"github.com/mcpchecker/mcpchecker/pkg/agent"
 	"github.com/mcpchecker/mcpchecker/pkg/extension/client"
@@ -332,6 +333,35 @@ func (r *evalRunner) runTask(
 	r.evaluateTaskAssertions(tc, manager, result)
 
 	result.CallHistory = manager.GetAllCallHistory()
+
+	// Compute per-call token counts on CallHistory records
+	callHistoryErr := mcpproxy.ComputeCallHistoryTokens(result.CallHistory)
+
+	// Compute MCP schema overhead (tool definitions + server instructions)
+	schemaTokens, schemaErr := mcpproxy.ComputeSchemaTokens(ctx, manager.GetMcpServers())
+
+	// Ensure TokenEstimate exists so MCP token data is always reported,
+	// even on agent failure or shell runner
+	if result.TokenEstimate == nil {
+		result.TokenEstimate = &agent.TokenEstimate{}
+	}
+
+	// Propagate token-counting errors
+	var tokenErrors []string
+	if result.TokenEstimate.Error != "" {
+		tokenErrors = append(tokenErrors, result.TokenEstimate.Error)
+	}
+	if callHistoryErr != "" {
+		tokenErrors = append(tokenErrors, callHistoryErr)
+	}
+	if schemaErr != nil {
+		tokenErrors = append(tokenErrors, schemaErr.Error())
+	}
+	result.TokenEstimate.Error = strings.Join(tokenErrors, "; ")
+
+	result.TokenEstimate.McpSchemaTokens = schemaTokens
+	result.TokenEstimate.MergeCallHistory(result.CallHistory)
+	result.TokenEstimate.RecalculateAggregates()
 
 	r.progressCallback(ProgressEvent{
 		Type:    EventTaskComplete,

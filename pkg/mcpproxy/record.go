@@ -17,6 +17,22 @@ type Recorder interface {
 	GetHistory() CallHistory
 }
 
+// TokenCount provides token count estimates for a single MCP call.
+type TokenCount struct {
+	InputTokens  int64 `json:"inputTokens"`
+	OutputTokens int64 `json:"outputTokens"`
+	TotalTokens  int64 `json:"totalTokens"`
+}
+
+// NewTokenCount creates a TokenCount with computed TotalTokens.
+func NewTokenCount(input, output int64) *TokenCount {
+	return &TokenCount{
+		InputTokens:  input,
+		OutputTokens: output,
+		TotalTokens:  input + output,
+	}
+}
+
 // CallRecord is the base for all MCP interaction types
 type CallRecord struct {
 	ServerName string    `json:"serverName"`
@@ -62,6 +78,7 @@ type ToolCall struct {
 	ToolName string               `json:"name"` // this is copied to the top level struct for convenience
 	Request  *mcp.CallToolRequest `json:"request,omitempty"`
 	Result   *mcp.CallToolResult  `json:"result,omitempty"`
+	Tokens   *TokenCount          `json:"tokens,omitempty"`
 }
 
 func (c *ToolCall) MarshalJSON() ([]byte, error) {
@@ -82,6 +99,7 @@ type ResourceRead struct {
 	URI     string                   `json:"uri"` // this is copied to the top level struct for convenience
 	Request *mcp.ReadResourceRequest `json:"request"`
 	Result  *mcp.ReadResourceResult  `json:"result"`
+	Tokens  *TokenCount              `json:"tokens,omitempty"`
 }
 
 func (r *ResourceRead) MarshalJSON() ([]byte, error) {
@@ -102,6 +120,7 @@ type PromptGet struct {
 	Name    string                `json:"name"` // this is copies to the top level struct for convenience
 	Request *mcp.GetPromptRequest `json:"request"`
 	Result  *mcp.GetPromptResult  `json:"result"`
+	Tokens  *TokenCount           `json:"tokens,omitempty"`
 }
 
 func (p *PromptGet) MarshalJSON() ([]byte, error) {

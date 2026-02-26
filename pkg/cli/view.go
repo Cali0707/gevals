@@ -158,21 +158,41 @@ func printTokenEstimate(estimate *agent.TokenEstimate) {
 		fmt.Printf(" [excludes system prompt & cache]")
 	}
 
-	// Show breakdown if we have detailed data
-	hasDetails := estimate.PromptTokens > 0 || estimate.MessageTokens > 0 ||
-		estimate.ThinkingTokens > 0 || estimate.ToolCallTokens > 0 || estimate.ToolResultTokens > 0
-
-	if hasDetails {
+	// Show input breakdown
+	hasInputDetails := estimate.PromptTokens > 0 || estimate.ToolOutputTokens > 0 ||
+		estimate.McpSchemaTokens > 0 || estimate.ResourceOutputTokens > 0 || estimate.PromptGetOutputTokens > 0
+	if hasInputDetails {
 		fmt.Printf("\n    input: prompt=~%d", estimate.PromptTokens)
-		if estimate.ToolResultTokens > 0 {
-			fmt.Printf(", tool_results=~%d", estimate.ToolResultTokens)
+		if estimate.ToolOutputTokens > 0 {
+			fmt.Printf(", tool_output=~%d", estimate.ToolOutputTokens)
 		}
+		if estimate.McpSchemaTokens > 0 {
+			fmt.Printf(", mcp_schemas=~%d", estimate.McpSchemaTokens)
+		}
+		if estimate.ResourceOutputTokens > 0 {
+			fmt.Printf(", resources=~%d", estimate.ResourceOutputTokens)
+		}
+		if estimate.PromptGetOutputTokens > 0 {
+			fmt.Printf(", prompts=~%d", estimate.PromptGetOutputTokens)
+		}
+	}
+
+	// Show output breakdown
+	hasOutputDetails := estimate.MessageTokens > 0 || estimate.ThinkingTokens > 0 ||
+		estimate.ToolInputTokens > 0 || estimate.ResourceInputTokens > 0 || estimate.PromptGetInputTokens > 0
+	if hasOutputDetails {
 		fmt.Printf("\n    output: message=~%d", estimate.MessageTokens)
 		if estimate.ThinkingTokens > 0 {
 			fmt.Printf(", thinking=~%d", estimate.ThinkingTokens)
 		}
-		if estimate.ToolCallTokens > 0 {
-			fmt.Printf(", tool_calls=~%d", estimate.ToolCallTokens)
+		if estimate.ToolInputTokens > 0 {
+			fmt.Printf(", tool_input=~%d", estimate.ToolInputTokens)
+		}
+		if estimate.ResourceInputTokens > 0 {
+			fmt.Printf(", resource_input=~%d", estimate.ResourceInputTokens)
+		}
+		if estimate.PromptGetInputTokens > 0 {
+			fmt.Printf(", prompt_input=~%d", estimate.PromptGetInputTokens)
 		}
 	}
 	fmt.Println()

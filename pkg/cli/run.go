@@ -302,6 +302,21 @@ func displayTextResults(results []*eval.EvalResult) error {
 		}
 	}
 
+	// Display token estimates
+	var totalTokens int64
+	var totalMcpSchemaTokens int64
+	hasTokenErrors := false
+	for _, result := range results {
+		if result.TokenEstimate != nil {
+			totalTokens += result.TokenEstimate.TotalTokens
+			totalMcpSchemaTokens += result.TokenEstimate.McpSchemaTokens
+			if result.TokenEstimate.Error != "" {
+				hasTokenErrors = true
+			}
+		}
+	}
+	printTokenSummary(totalTokens, totalMcpSchemaTokens, hasTokenErrors)
+
 	// Group by difficulty
 	fmt.Println()
 	bold.Println("=== Statistics by Difficulty ===")

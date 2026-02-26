@@ -21,6 +21,7 @@ type SummaryOutput struct {
 	AssertionsPassed       int           `json:"assertionsPassed"`
 	AssertionPassRate      float64       `json:"assertionPassRate"`
 	TotalTokensEstimate    int64         `json:"totalTokensEstimate"`
+	TotalMcpSchemaTokens   int64         `json:"totalMcpSchemaTokens"`
 	AgentTotalInputTokens  int64         `json:"agentTotalInputTokens"`
 	AgentTotalOutputTokens int64         `json:"agentTotalOutputTokens"`
 	JudgeTotalInputTokens  int64         `json:"judgeTotalInputTokens"`
@@ -34,6 +35,7 @@ type TaskSummary struct {
 	TaskError         string   `json:"taskError,omitempty"`
 	FailedAssertions  []string `json:"failedAssertions,omitempty"`
 	TokensEstimated   int64    `json:"tokensEstimated,omitempty"`
+	McpSchemaTokens   int64    `json:"mcpSchemaTokens,omitempty"`
 	TokenError        string   `json:"tokenError,omitempty"`
 	AgentInputTokens  int64    `json:"agentInputTokens"`
 	AgentOutputTokens int64    `json:"agentOutputTokens"`
@@ -136,8 +138,10 @@ func buildSummaryOutput(resultsFile string, evalResults []*eval.EvalResult) Summ
 		// Collect token estimates
 		if result.TokenEstimate != nil {
 			taskSummary.TokensEstimated = result.TokenEstimate.TotalTokens
+			taskSummary.McpSchemaTokens = result.TokenEstimate.McpSchemaTokens
 			taskSummary.TokenError = result.TokenEstimate.Error
 			summary.TotalTokensEstimate += result.TokenEstimate.TotalTokens
+			summary.TotalMcpSchemaTokens += result.TokenEstimate.McpSchemaTokens
 		}
 
 		// Collect actual token usage
@@ -226,21 +230,15 @@ func outputTextSummary(evalResults []*eval.EvalResult, summary SummaryOutput) {
 		summary.TasksPassed, summary.TasksTotal, summary.TaskPassRate*100)
 	fmt.Printf("Assertions: %d/%d passed (%.2f%%)\n",
 		summary.AssertionsPassed, summary.AssertionsTotal, summary.AssertionPassRate*100)
-	if summary.TotalTokensEstimate > 0 {
-		// Check if any task had token errors
-		hasTokenErrors := false
-		for _, task := range summary.Tasks {
-			if task.TokenError != "" {
-				hasTokenErrors = true
-				break
-			}
-		}
-		if hasTokenErrors {
-			fmt.Printf("Estimated Tokens: ~%d (incomplete - some counts failed)\n", summary.TotalTokensEstimate)
-		} else {
-			fmt.Printf("Estimated Tokens: ~%d (estimate - excludes system prompt & cache)\n", summary.TotalTokensEstimate)
+	// Check if any task had token errors
+	hasTokenErrors := false
+	for _, task := range summary.Tasks {
+		if task.TokenError != "" {
+			hasTokenErrors = true
+			break
 		}
 	}
+	printTokenSummary(summary.TotalTokensEstimate, summary.TotalMcpSchemaTokens, hasTokenErrors)
 
 	if summary.AgentTotalInputTokens > 0 || summary.AgentTotalOutputTokens > 0 {
 		fmt.Printf("Agent used tokens:\n")
@@ -261,6 +259,22 @@ func outputJSONSummary(summary SummaryOutput) error {
 	return encoder.Encode(summary)
 }
 
+// printTokenSummary prints a token count summary to stdout.
+// Used by both the check and summary commands.
+func printTokenSummary(totalTokens, mcpSchemaTokens int64, hasErrors bool) {
+	if totalTokens <= 0 {
+		return
+	}
+	if hasErrors {
+		fmt.Printf("Tokens:     ~%d (incomplete - some counts failed)\n", totalTokens)
+	} else {
+		fmt.Printf("Tokens:     ~%d (estimate - excludes system prompt & cache)\n", totalTokens)
+	}
+	if mcpSchemaTokens > 0 {
+		fmt.Printf("MCP schemas: ~%d (included in token total)\n", mcpSchemaTokens)
+	}
+}
+
 func outputGitHubSummary(summary SummaryOutput) {
 	fmt.Printf("results-file=%s\n", summary.ResultsFile)
 	fmt.Printf("tasks-total=%d\n", summary.TasksTotal)
@@ -270,6 +284,7 @@ func outputGitHubSummary(summary SummaryOutput) {
 	fmt.Printf("assertions-passed=%d\n", summary.AssertionsPassed)
 	fmt.Printf("assertion-pass-rate=%.4f\n", summary.AssertionPassRate)
 	fmt.Printf("tokens-estimated=%d\n", summary.TotalTokensEstimate)
+	fmt.Printf("mcp-schema-tokens=%d\n", summary.TotalMcpSchemaTokens)
 	fmt.Printf("agent-input-tokens=%d\n", summary.AgentTotalInputTokens)
 	fmt.Printf("agent-output-tokens=%d\n", summary.AgentTotalOutputTokens)
 	fmt.Printf("judge-input-tokens=%d\n", summary.JudgeTotalInputTokens)

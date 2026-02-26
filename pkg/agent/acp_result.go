@@ -56,23 +56,12 @@ func (res *acpResult) GetTokenEstimate() TokenEstimate {
 
 	if res.actualUsage != nil {
 		estimate.Source = TokenSourceActual
-		estimate.Actual = &ActualUsage{
-			InputTokens:  res.actualUsage.InputTokens,
-			OutputTokens: res.actualUsage.OutputTokens,
-			TotalTokens:  res.actualUsage.TotalTokens,
-		}
-		if res.actualUsage.ThoughtTokens != nil {
-			estimate.Actual.ThoughtTokens = res.actualUsage.ThoughtTokens
-		}
-		if res.actualUsage.CachedReadTokens != nil {
-			estimate.Actual.CachedReadTokens = res.actualUsage.CachedReadTokens
-		}
-		if res.actualUsage.CachedWriteTokens != nil {
-			estimate.Actual.CachedWriteTokens = res.actualUsage.CachedWriteTokens
-		}
+		estimate.Actual = ActualUsageFromACP(res.actualUsage)
 		estimate.InputTokens = res.actualUsage.InputTokens
 		estimate.OutputTokens = res.actualUsage.OutputTokens
 		estimate.TotalTokens = res.actualUsage.TotalTokens
+	} else {
+		estimate.RecalculateAggregates()
 	}
 
 	return estimate

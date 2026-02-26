@@ -20,6 +20,8 @@ type Server interface {
 	GetName() string
 	// GetAllowedTools returns all the tools the user allowed
 	GetAllowedTools(ctx context.Context) []*mcp.Tool
+	// GetInstructions returns the server instructions from InitializeResult
+	GetInstructions() string
 	// Close closes the MCP proxy server, but not the underlying client connection
 	Close() error
 	// GetCallHistory returns all the MCP calls made while the proxy server was running
@@ -29,10 +31,11 @@ type Server interface {
 }
 
 type server struct {
-	name        string
-	proxyServer *mcp.Server
-	proxyClient *mcpclient.Client
-	url         string
+	name         string
+	proxyServer  *mcp.Server
+	proxyClient  *mcpclient.Client
+	url          string
+	instructions string
 
 	// Call tracking
 	recorder Recorder
@@ -56,13 +59,19 @@ func NewProxyServerForClient(ctx context.Context, name string, client *mcpclient
 		return nil, fmt.Errorf("failed to create proxy server for %q: %w", name, err)
 	}
 
+	var instructions string
+	if initResult := client.ClientSession.InitializeResult(); initResult != nil {
+		instructions = initResult.Instructions
+	}
+
 	return &server{
-		name:        name,
-		proxyServer: s,
-		proxyClient: client,
-		recorder:    r,
-		ready:       make(chan struct{}),
-		done:        make(chan error, 1),
+		name:         name,
+		proxyServer:  s,
+		proxyClient:  client,
+		instructions: instructions,
+		recorder:     r,
+		ready:        make(chan struct{}),
+		done:         make(chan error, 1),
 	}, nil
 }
 
@@ -221,6 +230,10 @@ func (s *server) GetName() string {
 
 func (s *server) GetAllowedTools(ctx context.Context) []*mcp.Tool {
 	return s.proxyClient.GetAllowedTools(ctx)
+}
+
+func (s *server) GetInstructions() string {
+	return s.instructions
 }
 
 func (s *server) Close() error {
