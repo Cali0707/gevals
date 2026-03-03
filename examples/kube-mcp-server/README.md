@@ -17,7 +17,7 @@ kube-mcp-server/
 │   ├── agent.yaml
 │   ├── eval.yaml
 │   └── eval-inline.yaml
-└── openai-agent/                # OpenAI-compatible agent configuration
+└── openai-agent/                # LLM agent configuration
     ├── agent.yaml
     ├── eval.yaml
     └── eval-inline.yaml
@@ -57,13 +57,11 @@ The tasks and MCP configuration are shared - only the agent configuration differ
 
 ---
 
-### Option 2: OpenAI-Compatible Agent (Built-in)
+### Option 2: LLM Agent (Built-in)
 
 ```bash
-# Set your model credentials
-export MODEL_BASE_URL='https://your-api-endpoint.com/v1'
-export MODEL_KEY='your-api-key'
-export MODEL_NAME='your-model-name'
+# Set your provider-specific API key
+export OPENAI_API_KEY='your-api-key'
 
 # Run the test
 ./mcpchecker check examples/kube-mcp-server/openai-agent/eval.yaml
@@ -92,14 +90,14 @@ commands:
     claude {{ .McpServerFileArgs }} --print "{{ .Prompt }}"
 ```
 
-### OpenAI Agent (openai-agent/agent.yaml)
+### LLM Agent (openai-agent/agent.yaml)
 ```yaml
 builtin:
-  type: "openai-agent"
-  model: "gpt-4"
+  type: "llm-agent"
+  model: "openai:gpt-4"
 ```
 
-Uses the built-in OpenAI agent with model configuration.
+Uses the built-in LLM agent with provider:model configuration.
 
 ## Expected Results
 

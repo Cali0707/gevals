@@ -120,10 +120,10 @@ config:
   agent:
     type: "builtin.claude-code"
 
-  # Option 2: OpenAI-compatible builtin agent
+  # Option 2: LLM agent (supports openai, anthropic, gemini, etc.)
   # agent:
-  #   type: "builtin.openai-agent"
-  #   model: "gpt-4"
+  #   type: "builtin.llm-agent"
+  #   model: "openai:gpt-4"
 
   # Option 3: Reference a custom agent file
   # agent:
@@ -169,17 +169,16 @@ builtin:
   type: "claude-code"  # Use built-in Claude Code configuration
 ```
 
-Or with OpenAI-compatible agents:
+Or with LLM agents (supports multiple providers):
 ```yaml
 kind: Agent
 metadata:
   name: "my-agent"
 builtin:
-  type: "openai-agent"
-  model: "gpt-4"
-# Set these environment variables:
-# export MODEL_BASE_URL="https://api.openai.com/v1"
-# export MODEL_KEY="sk-..."
+  type: "llm-agent"
+  model: "openai:gpt-4"  # provider:model-id format
+# Set provider-specific environment variables:
+# export OPENAI_API_KEY="sk-..."
 ```
 
 For custom configurations, specify the `commands` section manually (see "Agent Configuration" below).
@@ -500,30 +499,32 @@ config:
     type: "builtin.claude-code"
 ```
 
-**OpenAI-compatible agents**:
+**LLM agents** (supports openai, anthropic, gemini, and more):
 ```yaml
 kind: Eval
 config:
   agent:
-    type: "builtin.openai-agent"
-    model: "gpt-4"  # or any OpenAI-compatible model
+    type: "builtin.llm-agent"
+    model: "openai:gpt-4"  # provider:model-id format
 ```
 
-Set environment variables for API access:
+Set provider-specific environment variables:
 ```bash
-# Generic environment variables used by all OpenAI-compatible models
-export MODEL_BASE_URL="https://api.openai.com/v1"
-export MODEL_KEY="sk-..."
+# OpenAI
+export OPENAI_API_KEY="sk-..."
 
-# For other providers (e.g., granite, custom endpoints):
-# export MODEL_BASE_URL="https://your-endpoint/v1"
-# export MODEL_KEY="your-key"
+# Anthropic
+export ANTHROPIC_API_KEY="sk-ant-..."
+
+# For custom OpenAI-compatible endpoints:
+export OPENAI_BASE_URL="https://your-endpoint/v1"
+export OPENAI_API_KEY="your-key"
 ```
 
 ### Available Built-in Types
 
 - `claude-code` - Anthropic's Claude Code CLI
-- `openai-agent` - OpenAI-compatible agents using direct API calls (requires model)
+- `llm-agent` - Multi-provider LLM agent using ACP protocol (requires model in `provider:model-id` format)
 
 ### ACP Mode
 
