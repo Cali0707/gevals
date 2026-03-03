@@ -1,7 +1,6 @@
 package agent
 
 import (
-	"os"
 	"os/exec"
 	"testing"
 
@@ -33,45 +32,26 @@ func TestLoadWithBuiltins(t *testing.T) {
 				return err != nil
 			}(),
 		},
-		"openai-agent builtin with valid env": {
+		"llm-agent builtin": {
 			file: "builtin-openai-agent.yaml",
-			setupEnv: func() {
-				os.Setenv("MODEL_BASE_URL", "https://api.openai.com/v1")
-				os.Setenv("MODEL_KEY", "test-key")
-			},
-			cleanupEnv: func() {
-				os.Unsetenv("MODEL_BASE_URL")
-				os.Unsetenv("MODEL_KEY")
-			},
 			validate: func(t *testing.T, spec *AgentSpec) {
-				assert.Equal(t, "openai-agent-gpt-4", spec.Metadata.Name)
-				// Check builtin configuration is present
+				assert.Equal(t, "llm-agent-openai-gpt-4", spec.Metadata.Name)
 				require.NotNil(t, spec.Builtin)
-				assert.Equal(t, "openai-agent", spec.Builtin.Type)
-				assert.Equal(t, "gpt-4", spec.Builtin.Model)
-				assert.Equal(t, "https://api.openai.com/v1", spec.Builtin.BaseURL)
-				assert.Equal(t, "test-key", spec.Builtin.APIKey)
+				assert.Equal(t, "llm-agent", spec.Builtin.Type)
+				assert.Equal(t, "openai:gpt-4", spec.Builtin.Model)
 			},
 		},
 		"builtin with overrides": {
 			file: "builtin-with-overrides.yaml",
-			setupEnv: func() {
-				os.Setenv("MODEL_BASE_URL", "https://api.openai.com/v1")
-				os.Setenv("MODEL_KEY", "test-key")
-			},
-			cleanupEnv: func() {
-				os.Unsetenv("MODEL_BASE_URL")
-				os.Unsetenv("MODEL_KEY")
-			},
 			validate: func(t *testing.T, spec *AgentSpec) {
 				// Name should be overridden
-				assert.Equal(t, "custom-openai", spec.Metadata.Name)
+				assert.Equal(t, "custom-llm", spec.Metadata.Name)
 				// UseVirtualHome should be true as specified in the YAML override
 				require.NotNil(t, spec.Commands.UseVirtualHome)
 				assert.True(t, *spec.Commands.UseVirtualHome)
 				// Builtin configuration should be present
 				require.NotNil(t, spec.Builtin)
-				assert.Equal(t, "openai-agent", spec.Builtin.Type)
+				assert.Equal(t, "llm-agent", spec.Builtin.Type)
 			},
 		},
 		"non-builtin agent (no builtin field)": {
@@ -92,16 +72,6 @@ func TestLoadWithBuiltins(t *testing.T) {
 			file:        "builtin-openai-no-model.yaml",
 			expectErr:   true,
 			errContains: "requires a model",
-		},
-		"builtin with missing environment variables": {
-			file: "builtin-openai-agent.yaml",
-			setupEnv: func() {
-				// Deliberately don't set env vars
-				os.Unsetenv("MODEL_BASE_URL")
-				os.Unsetenv("MODEL_KEY")
-			},
-			expectErr:   true,
-			errContains: "MODEL_BASE_URL",
 		},
 	}
 

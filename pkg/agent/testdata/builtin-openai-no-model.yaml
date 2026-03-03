@@ -1,6 +1,6 @@
 kind: Agent
 metadata:
-  name: "openai-no-model"
+  name: "llm-no-model"
 builtin:
-  type: "openai-agent"
+  type: "llm-agent"
   # Missing required model field

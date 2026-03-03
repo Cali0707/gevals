@@ -23,16 +23,17 @@ type AgentSpec struct {
 
 // BuiltinRef references a built-in agent type with optional model
 type BuiltinRef struct {
-	// Type is the built-in agent type (e.g., "openai-agent", "claude-code")
+	// Type is the built-in agent type (e.g., "llm-agent", "claude-code")
 	Type string `json:"type"`
 
-	// Model is the AI model to use (required for some types like openai-agent)
+	// Model is the model to use in "provider:model-id" format (e.g. "openai:gpt-4o").
+	// Required for "llm-agent" type.
 	Model string `json:"model,omitempty"`
 
-	// BaseURL overrides the default API base URL
+	// BaseURL is the API base URL (deprecated: used for backwards compat with openai-agent/openai-acp configs)
 	BaseURL string `json:"baseUrl,omitempty"`
 
-	// APIKey overrides the default API key (from environment)
+	// APIKey is the API key (deprecated: used for backwards compat with openai-agent/openai-acp configs)
 	APIKey string `json:"apiKey,omitempty"`
 }
 

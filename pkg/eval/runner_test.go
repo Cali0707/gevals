@@ -40,20 +40,12 @@ func TestLoadAgentSpec(t *testing.T) {
 				assert.Equal(t, "claude-code", agentSpec.Metadata.Name)
 			},
 		},
-		"inline agent - builtin.openai-agent with valid env": {
-			setupEnv: func() {
-				os.Setenv("MODEL_BASE_URL", "https://api.openai.com/v1")
-				os.Setenv("MODEL_KEY", "test-key")
-			},
-			cleanupEnv: func() {
-				os.Unsetenv("MODEL_BASE_URL")
-				os.Unsetenv("MODEL_KEY")
-			},
+		"inline agent - builtin.llm-agent": {
 			spec: &EvalSpec{
 				Config: EvalConfig{
 					Agent: &AgentRef{
-						Type:  "builtin.openai-agent",
-						Model: "gpt-4",
+						Type:  "builtin.llm-agent",
+						Model: "openai:gpt-4",
 					},
 				},
 			},
@@ -61,25 +53,17 @@ func TestLoadAgentSpec(t *testing.T) {
 				agentSpec, err := runner.loadAgentSpec()
 				require.NoError(t, err)
 				require.NotNil(t, agentSpec)
-				assert.Equal(t, "openai-agent-gpt-4", agentSpec.Metadata.Name)
+				assert.Equal(t, "llm-agent-openai:gpt-4", agentSpec.Metadata.Name)
 				require.NotNil(t, agentSpec.Builtin)
-				assert.Equal(t, "openai-agent", agentSpec.Builtin.Type)
-				assert.Equal(t, "gpt-4", agentSpec.Builtin.Model)
+				assert.Equal(t, "llm-agent", agentSpec.Builtin.Type)
+				assert.Equal(t, "openai:gpt-4", agentSpec.Builtin.Model)
 			},
 		},
-		"inline agent - builtin.openai-agent without model": {
-			setupEnv: func() {
-				os.Setenv("MODEL_BASE_URL", "https://api.openai.com/v1")
-				os.Setenv("MODEL_KEY", "test-key")
-			},
-			cleanupEnv: func() {
-				os.Unsetenv("MODEL_BASE_URL")
-				os.Unsetenv("MODEL_KEY")
-			},
+		"inline agent - builtin.llm-agent without model": {
 			spec: &EvalSpec{
 				Config: EvalConfig{
 					Agent: &AgentRef{
-						Type: "builtin.openai-agent",
+						Type: "builtin.llm-agent",
 					},
 				},
 			},
