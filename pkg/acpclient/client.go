@@ -76,13 +76,39 @@ func (c *client) Start(ctx context.Context) error {
 }
 
 func (c *client) Run(ctx context.Context, prompt string, servers mcpproxy.ServerManager) ([]acp.SessionUpdate, error) {
+	updates, _, err := c.run(ctx, prompt, servers)
+	return updates, err
+}
+
+func (c *client) RunWithUsage(ctx context.Context, prompt string, servers mcpproxy.ServerManager) (*RunResult, error) {
+	updates, promptResp, err := c.run(ctx, prompt, servers)
+	if err != nil {
+		return nil, err
+	}
+
+	result := &RunResult{
+		Updates: updates,
+	}
+
+	// Prefer usage from the PromptResponse Meta, as it contains the final
+	// authoritative token counts reported after the full agent loop completes.
+	// Fall back to scanning session update Meta fields.
+	result.Usage = ExtractUsageFromPromptResponse(promptResp)
+	if result.Usage == nil {
+		result.Usage = ExtractUsageFromMeta(updates)
+	}
+
+	return result, nil
+}
+
+func (c *client) run(ctx context.Context, prompt string, servers mcpproxy.ServerManager) ([]acp.SessionUpdate, acp.PromptResponse, error) {
 	if c.conn == nil {
-		return nil, fmt.Errorf("acpclient.Client.Run must be called after acpclient.Client.Start")
+		return nil, acp.PromptResponse{}, fmt.Errorf("acpclient.Client.Run must be called after acpclient.Client.Start")
 	}
 
 	tmpDir, err := os.MkdirTemp("", "mcpchecker-agent-")
 	if err != nil {
-		return nil, fmt.Errorf("failed to create temporary directory for agent execution: %w", err)
+		return nil, acp.PromptResponse{}, fmt.Errorf("failed to create temporary directory for agent execution: %w", err)
 	}
 
 	defer func() {
@@ -93,7 +119,7 @@ func (c *client) Run(ctx context.Context, prompt string, servers mcpproxy.Server
 	for _, srv := range servers.GetMcpServers() {
 		cfg, err := srv.GetConfig()
 		if err != nil {
-			return nil, fmt.Errorf("failed to get config for mcp server %q: %w", srv.GetName(), err)
+			return nil, acp.PromptResponse{}, fmt.Errorf("failed to get config for mcp server %q: %w", srv.GetName(), err)
 		}
 
 		mcpServers = append(mcpServers, acp.McpServer{
@@ -111,7 +137,7 @@ func (c *client) Run(ctx context.Context, prompt string, servers mcpproxy.Server
 		McpServers: mcpServers,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to start new ACP session: %w", err)
+		return nil, acp.PromptResponse{}, fmt.Errorf("failed to start new ACP session: %w", err)
 	}
 
 	// store the session
@@ -121,11 +147,12 @@ func (c *client) Run(ctx context.Context, prompt string, servers mcpproxy.Server
 
 	// this runs the current prompt to completion
 	// if we were to support multi turn flows, we could run further prompts to the same session from here
-	if _, err := c.conn.Prompt(ctx, acp.PromptRequest{
+	promptResp, err := c.conn.Prompt(ctx, acp.PromptRequest{
 		SessionId: session.SessionId,
 		Prompt:    []acp.ContentBlock{acp.TextBlock(prompt)},
-	}); err != nil {
-		return nil, fmt.Errorf("failed to send prompt to acp session: %w", err)
+	})
+	if err != nil {
+		return nil, acp.PromptResponse{}, fmt.Errorf("failed to send prompt to acp session: %w", err)
 	}
 
 	c.mu.Lock()
@@ -135,23 +162,7 @@ func (c *client) Run(ctx context.Context, prompt string, servers mcpproxy.Server
 	res := slices.Clone(c.sessions[session.SessionId].updates)
 	delete(c.sessions, session.SessionId)
 
-	return res, nil
-}
-
-func (c *client) RunWithUsage(ctx context.Context, prompt string, servers mcpproxy.ServerManager) (*RunResult, error) {
-	updates, err := c.Run(ctx, prompt, servers)
-	if err != nil {
-		return nil, err
-	}
-
-	result := &RunResult{
-		Updates: updates,
-	}
-
-	// Extract usage data from Meta fields (safe - SDK already parsed the JSON)
-	result.Usage = ExtractUsageFromMeta(updates)
-
-	return result, nil
+	return res, promptResp, nil
 }
 
 func (c *client) Close(ctx context.Context) error {
