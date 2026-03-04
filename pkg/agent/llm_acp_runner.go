@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/mcpchecker/mcpchecker/pkg/acpclient"
 	"github.com/mcpchecker/mcpchecker/pkg/llmagent"
@@ -31,7 +32,7 @@ func NewLLMACPRunner(model string) (Runner, error) {
 }
 
 func (r *llmACPRunner) AgentName() string {
-	return fmt.Sprintf("llm-agent-%s", r.model)
+	return fmt.Sprintf("llm-agent-%s", strings.ReplaceAll(r.model, ":", "-"))
 }
 
 func (r *llmACPRunner) WithMcpServerInfo(mcpServers mcpproxy.ServerManager) Runner {

@@ -279,7 +279,7 @@ metadata:
 config:
   agent:
     type: "builtin.llm-agent"
-    model: "gpt-4"
+    model: "openai:gpt-4"
   mcpConfigFile: mcp-config.yaml
   taskSets:
     - path: tasks/creative-task.yaml

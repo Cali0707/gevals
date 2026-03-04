@@ -9,7 +9,7 @@ import (
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// ToolsFromServers adapts all of the tools available in the mcp clients to fantasy.AgentTool
+// ToolsFromMcpClients adapts all of the tools available in the mcp clients to fantasy.AgentTool
 func ToolsFromMcpClients(clients []McpClient, interceptor toolInterceptor) []fantasy.AgentTool {
 	var tools []fantasy.AgentTool
 	for _, client := range clients {

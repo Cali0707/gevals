@@ -64,11 +64,26 @@ func (a *acpAgent) RunACP(ctx context.Context, in io.Reader, out io.Writer) erro
 	conn := acp.NewAgentSideConnection(a, out, in)
 	a.conn = conn
 
+	defer a.cleanupAllSessions()
+
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
 	case <-conn.Done():
 		return nil
+	}
+}
+
+// cleanupAllSessions closes all active sessions and their MCP clients.
+// It atomically drains the session map to avoid double-cleanup races with Cancel.
+func (a *acpAgent) cleanupAllSessions() {
+	a.mu.Lock()
+	sessions := a.sessions
+	a.sessions = make(map[acp.SessionId]*acpSession)
+	a.mu.Unlock()
+
+	for _, s := range sessions {
+		s.cleanup()
 	}
 }
 
@@ -163,6 +178,7 @@ func (a *acpAgent) Prompt(ctx context.Context, params acp.PromptRequest) (acp.Pr
 	}
 
 	promptCtx, promptCancel := context.WithCancel(s.ctx)
+	defer promptCancel()
 
 	a.mu.Lock()
 	s.promptGen++

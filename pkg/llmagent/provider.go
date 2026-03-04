@@ -79,9 +79,14 @@ func (p *anthropicProviderBuilder) Build() (fantasy.Provider, error) {
 		opts = append(opts, anthropic.WithVertex(project, location))
 	} else {
 		key := os.Getenv(anthropicApiKeyEnvVar)
-		if key != "" {
-			opts = append(opts, anthropic.WithAPIKey(key))
+		if key == "" {
+			return nil, fmt.Errorf(
+				"provider anthropic requires env var %q to be set (or enable Vertex AI with %q=1)",
+				anthropicApiKeyEnvVar,
+				anthropicUseVertexEnvVar,
+			)
 		}
+		opts = append(opts, anthropic.WithAPIKey(key))
 	}
 
 	return anthropic.New(opts...)
@@ -114,9 +119,14 @@ func (p *geminiProviderBuilder) Build() (fantasy.Provider, error) {
 		opts = append(opts, google.WithVertex(project, location))
 	} else {
 		key := os.Getenv(geminiApiKeyEnvVar)
-		if key != "" {
-			opts = append(opts, google.WithGeminiAPIKey(key))
+		if key == "" {
+			return nil, fmt.Errorf(
+				"provider gemini requires env var %q to be set (or enable Vertex AI with %q=1)",
+				geminiApiKeyEnvVar,
+				geminiUseVertexEnvVar,
+			)
 		}
+		opts = append(opts, google.WithGeminiAPIKey(key))
 	}
 
 	return google.New(opts...)

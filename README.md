@@ -179,6 +179,8 @@ builtin:
   model: "openai:gpt-4"  # provider:model-id format
 # Set provider-specific environment variables:
 # export OPENAI_API_KEY="sk-..."
+# export ANTHROPIC_API_KEY="sk-ant-..."
+# export GEMINI_API_KEY="..."
 ```
 
 For custom configurations, specify the `commands` section manually (see "Agent Configuration" below).
@@ -515,6 +517,19 @@ export OPENAI_API_KEY="sk-..."
 
 # Anthropic
 export ANTHROPIC_API_KEY="sk-ant-..."
+
+# Anthropic via Vertex AI
+export ANTHROPIC_USE_VERTEX=1
+export GOOGLE_CLOUD_PROJECT="your-project"
+export GOOGLE_CLOUD_LOCATION="us-central1"
+
+# Gemini
+export GEMINI_API_KEY="..."
+
+# Gemini via Vertex AI
+export GEMINI_USE_VERTEX=1
+export GOOGLE_CLOUD_PROJECT="your-project"
+export GOOGLE_CLOUD_LOCATION="us-central1"
 
 # For custom OpenAI-compatible endpoints:
 export OPENAI_BASE_URL="https://your-endpoint/v1"
