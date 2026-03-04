@@ -43,17 +43,28 @@ func (t *mcpTool) Info() fantasy.ToolInfo {
 	}
 
 	if t.tool.InputSchema != nil {
-		if params, ok := t.tool.InputSchema.(map[string]any); ok {
-			if _, hasProps := params["properties"]; !hasProps {
-				params["properties"] = map[string]any{}
+		if schemaMap, ok := t.tool.InputSchema.(map[string]any); ok {
+			if props, ok := schemaMap["properties"]; ok {
+				if propsMap, ok := props.(map[string]any); ok {
+					info.Parameters = propsMap
+				}
 			}
-			info.Parameters = params
+			if req, ok := schemaMap["required"]; ok {
+				if reqArr, ok := req.([]any); ok {
+					required := make([]string, 0, len(reqArr))
+					for _, r := range reqArr {
+						if s, ok := r.(string); ok {
+							required = append(required, s)
+						}
+					}
+					info.Required = required
+				}
+			}
 		}
-	} else {
-		info.Parameters = map[string]any{
-			"type":       "object",
-			"properties": map[string]any{},
-		}
+	}
+
+	if info.Parameters == nil {
+		info.Parameters = map[string]any{}
 	}
 
 	return info
