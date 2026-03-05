@@ -54,14 +54,14 @@ type EvalConfig struct {
 type AgentRef struct {
 	// Type specifies the agent type:
 	// - "builtin.claude-code" for Claude Code
-	// - "builtin.openai-agent" for OpenAI-compatible agents
+	// - "builtin.llm-agent" for LLM agents (supports openai, anthropic, gemini, etc.)
 	// - "file" for custom agent configuration files
 	Type string `json:"type"`
 
 	// Path to agent configuration file (required when type is "file")
 	Path string `json:"path,omitempty"`
 
-	// Model name (required for some builtin types like openai-agent)
+	// Model in "provider:model-id" format (required for builtin.llm-agent)
 	Model string `json:"model,omitempty"`
 }
 

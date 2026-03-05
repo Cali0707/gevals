@@ -57,10 +57,10 @@ func (ec *EvalConfig) ClaudeCodeAgent() *EvalConfig {
 	return ec
 }
 
-// OpenAIAgent sets OpenAI-compatible agent with a model
-func (ec *EvalConfig) OpenAIAgent(model string) *EvalConfig {
+// LLMAgent sets an LLM agent with a model in "provider:model-id" format
+func (ec *EvalConfig) LLMAgent(model string) *EvalConfig {
 	ec.spec.Config.Agent = &eval.AgentRef{
-		Type:  "builtin.openai-agent",
+		Type:  "builtin.llm-agent",
 		Model: model,
 	}
 	return ec

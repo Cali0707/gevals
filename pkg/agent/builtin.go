@@ -1,8 +1,9 @@
 package agent
 
 var builtinTypes = map[string]BuiltinAgent{
-	"openai-agent": &OpenAIAgent{},
-	"openai-acp":   &OpenAIACPAgent{},
+	"llm-agent":    &LLMAgent{},
+	"openai-agent": &LLMAgent{}, // deprecated alias
+	"openai-acp":   &LLMAgent{}, // deprecated alias
 	"claude-code":  &ClaudeCodeAgent{},
 }
 

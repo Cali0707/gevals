@@ -17,6 +17,19 @@ type Usage struct {
 	CachedWriteTokens *int64 `json:"cached_write_tokens,omitempty"`
 }
 
+// ExtractUsageFromPromptResponse attempts to extract usage data from the
+// PromptResponse Meta field. Returns nil if no usage data is found.
+//
+// Usage is extracted from Meta until a dedicated Usage field is added directly
+// to the PromptResponse, as proposed in:
+// https://agentclientprotocol.com/rfds/session-usage#context-window-and-cost-via-session%2Fupdate
+func ExtractUsageFromPromptResponse(resp acp.PromptResponse) *Usage {
+	if resp.Meta == nil {
+		return nil
+	}
+	return parseUsageFromMeta(resp.Meta)
+}
+
 // ExtractUsageFromMeta attempts to extract usage data from the Meta field
 // of session updates. Returns the LAST usage found since token counts are
 // typically cumulative and reported at the end of a session.

@@ -385,26 +385,65 @@ func NewRunnerForSpec(spec *AgentSpec) (Runner, error) {
 		return NewAcpRunner(spec.AcpConfig, spec.Metadata.Name), nil
 	}
 
-	// Check if this is an OpenAI agent with builtin configuration
-	if spec.Builtin != nil && spec.Builtin.Type == "openai-agent" {
-		fmt.Fprintf(os.Stderr, "\nWARNING: The \"openai-agent\" agent type is deprecated and will be removed in the next release.\n"+
-			"  Migrate to \"openai-acp\" by changing the agent type in your config:\n"+
-			"    - In eval config: type: \"builtin.openai-acp\"\n"+
-			"    - In agent YAML: type: \"openai-acp\"\n"+
-			"  Both types use the same MODEL_BASE_URL and MODEL_KEY environment variables.\n"+
-			"  The \"openai-acp\" agent also provides token estimation and structured tool call tracking.\n\n")
-		return NewOpenAIAgentRunner(spec.Builtin.Model, spec.Builtin.BaseURL, spec.Builtin.APIKey)
-	}
+	// Check if this is an LLM agent (or a deprecated alias)
+	if spec.Builtin != nil {
+		switch spec.Builtin.Type {
+		case "llm-agent", "openai-agent", "openai-acp":
+			model := spec.Builtin.Model
 
-	// Check if this is an OpenAI ACP agent with builtin configuration
-	if spec.Builtin != nil && spec.Builtin.Type == "openai-acp" {
-		return NewOpenAIACPRunner(spec.Builtin.Model, spec.Builtin.BaseURL, spec.Builtin.APIKey)
+			if spec.Builtin.Type != "llm-agent" {
+				fmt.Fprintf(os.Stderr, "\nWARNING: The %q agent type is deprecated and will be removed in a future release.\n"+
+					"  Migrate to \"llm-agent\" with model in \"provider:model-id\" format:\n"+
+					"    - In eval config: type: \"builtin.llm-agent\", model: \"openai:<model>\"\n"+
+					"    - In agent YAML: type: \"llm-agent\", model: \"openai:<model>\"\n"+
+					"  Use provider-specific env vars (e.g. OPENAI_API_KEY) instead of MODEL_KEY.\n\n",
+					spec.Builtin.Type)
+
+				// Convert bare model name to provider:model format for backwards compat
+				if model != "" && !strings.Contains(model, ":") {
+					model = "openai:" + model
+				}
+			}
+
+			migrateLegacyEnvVars(spec.Builtin)
+			return NewLLMACPRunner(model)
+		}
 	}
 
 	// Use the standard shell-based runner for all other agents
 	return &agentSpecRunner{
 		AgentSpec: spec,
 	}, nil
+}
+
+// migrateLegacyEnvVars migrates deprecated env vars and builtin ref fields
+// to the provider-specific env vars expected by the llmagent package.
+// Only sets new env vars if they are not already set.
+func migrateLegacyEnvVars(ref *BuiltinRef) {
+	setIfEmpty := func(newVar, value, source string) {
+		if value == "" {
+			return
+		}
+		if os.Getenv(newVar) != "" {
+			return
+		}
+		fmt.Fprintf(os.Stderr, "WARNING: %s is deprecated. Set %s directly instead.\n", source, newVar)
+		os.Setenv(newVar, value)
+	}
+
+	// Migrate base URL: ref.BaseURL holds a literal URL value
+	if ref.BaseURL != "" {
+		setIfEmpty("OPENAI_BASE_URL", ref.BaseURL, "builtin baseUrl field")
+	}
+	// Fall back to MODEL_BASE_URL env var
+	setIfEmpty("OPENAI_BASE_URL", os.Getenv("MODEL_BASE_URL"), "MODEL_BASE_URL")
+
+	// Migrate API key: ref.APIKey references an env var name containing the key
+	if ref.APIKey != "" {
+		setIfEmpty("OPENAI_API_KEY", os.Getenv(ref.APIKey), fmt.Sprintf("builtin apiKey (%s)", ref.APIKey))
+	}
+	// Fall back to MODEL_KEY env var
+	setIfEmpty("OPENAI_API_KEY", os.Getenv("MODEL_KEY"), "MODEL_KEY")
 }
 
 func (a *agentSpecRunner) RunTask(ctx context.Context, prompt string) (AgentResult, error) {

@@ -48,9 +48,9 @@ config:
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `type` | string | Yes | Agent type: "builtin.claude-code", "builtin.openai-agent", or "file" |
+| `type` | string | Yes | Agent type: "builtin.claude-code", "builtin.llm-agent", or "file" |
 | `path` | string | Conditional | Path to agent YAML file (required when type is "file") |
-| `model` | string | Conditional | Model name (required for builtin.openai-agent) |
+| `model` | string | Conditional | Model name (required for builtin.llm-agent) |
 
 ## taskSets Array Items
 
@@ -278,8 +278,8 @@ metadata:
   name: "flexible-eval"
 config:
   agent:
-    type: "builtin.openai-agent"
-    model: "gpt-4"
+    type: "builtin.llm-agent"
+    model: "openai:gpt-4"
   mcpConfigFile: mcp-config.yaml
   taskSets:
     - path: tasks/creative-task.yaml

@@ -1,14 +1,13 @@
 kind: Eval
 metadata:
-  name: "openai-agent-kubernetes-test"
+  name: "llm-agent-kubernetes-test"
 config:
   # Inline agent configuration - no separate agent.yaml file needed
   agent:
-    type: "builtin.openai-acp"
-    model: "mistral-small-24b-w8a8"  # Change to your model
-  # Before running, set environment variables:
-  #   export MODEL_BASE_URL="https://api.openai.com/v1"
-  #   export MODEL_KEY="sk-..."
+    type: "builtin.llm-agent"
+    model: "openai:mistral-small-24b-w8a8"  # Change to your provider:model
+  # Before running, set the provider-specific environment variable:
+  #   export OPENAI_API_KEY="sk-..."
   mcpConfigFile: ../mcp-config.yaml
   llmJudge:
     env:

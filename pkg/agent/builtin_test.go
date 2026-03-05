@@ -1,7 +1,6 @@
 package agent
 
 import (
-	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -14,10 +13,20 @@ func TestGetBuiltinType(t *testing.T) {
 		shouldExist  bool
 		expectedName string
 	}{
-		"openai-agent exists": {
+		"llm-agent exists": {
+			agentType:    "llm-agent",
+			shouldExist:  true,
+			expectedName: "llm-agent",
+		},
+		"openai-agent deprecated alias": {
 			agentType:    "openai-agent",
 			shouldExist:  true,
-			expectedName: "openai-agent",
+			expectedName: "llm-agent",
+		},
+		"openai-acp deprecated alias": {
+			agentType:    "openai-acp",
+			shouldExist:  true,
+			expectedName: "llm-agent",
 		},
 		"claude-code exists": {
 			agentType:    "claude-code",
@@ -53,8 +62,8 @@ func TestListBuiltinTypes(t *testing.T) {
 
 	// Check that expected agents are present
 	expectedAgents := map[string]bool{
-		"openai-agent": false,
-		"claude-code":  false,
+		"llm-agent":   false,
+		"claude-code": false,
 	}
 
 	for _, agent := range agents {
@@ -68,17 +77,16 @@ func TestListBuiltinTypes(t *testing.T) {
 	}
 }
 
-func TestOpenAIAgent(t *testing.T) {
-	agent := &OpenAIAgent{}
+func TestLLMAgent(t *testing.T) {
+	agent := &LLMAgent{}
 
 	t.Run("Name", func(t *testing.T) {
-		assert.Equal(t, "openai-agent", agent.Name())
+		assert.Equal(t, "llm-agent", agent.Name())
 	})
 
 	t.Run("Description", func(t *testing.T) {
 		desc := agent.Description()
 		assert.NotEmpty(t, desc)
-		assert.Contains(t, desc, "OpenAI")
 	})
 
 	t.Run("RequiresModel", func(t *testing.T) {
@@ -86,7 +94,6 @@ func TestOpenAIAgent(t *testing.T) {
 	})
 
 	t.Run("ValidateEnvironment", func(t *testing.T) {
-		// Should always succeed - no external binary required
 		err := agent.ValidateEnvironment()
 		assert.NoError(t, err)
 	})
@@ -98,57 +105,16 @@ func TestOpenAIAgent(t *testing.T) {
 		assert.Contains(t, err.Error(), "model is required")
 	})
 
-	t.Run("GetDefaults requires environment variables", func(t *testing.T) {
-		// Clear any existing env vars
-		oldBaseURL := os.Getenv("MODEL_BASE_URL")
-		oldAPIKey := os.Getenv("MODEL_KEY")
-		defer func() {
-			if oldBaseURL != "" {
-				os.Setenv("MODEL_BASE_URL", oldBaseURL)
-			}
-			if oldAPIKey != "" {
-				os.Setenv("MODEL_KEY", oldAPIKey)
-			}
-		}()
-		os.Unsetenv("MODEL_BASE_URL")
-		os.Unsetenv("MODEL_KEY")
-
-		spec, err := agent.GetDefaults("gpt-4")
-		assert.Error(t, err)
-		assert.Nil(t, spec)
-		assert.Contains(t, err.Error(), "MODEL_BASE_URL")
-		assert.Contains(t, err.Error(), "MODEL_KEY")
-	})
-
-	t.Run("GetDefaults with valid environment", func(t *testing.T) {
-		// Set up environment variables
-		os.Setenv("MODEL_BASE_URL", "https://api.openai.com/v1")
-		os.Setenv("MODEL_KEY", "test-key")
-		defer func() {
-			os.Unsetenv("MODEL_BASE_URL")
-			os.Unsetenv("MODEL_KEY")
-		}()
-
-		spec, err := agent.GetDefaults("gpt-4")
+	t.Run("GetDefaults with valid model", func(t *testing.T) {
+		spec, err := agent.GetDefaults("openai:gpt-4")
 		require.NoError(t, err)
 		require.NotNil(t, spec)
 
-		// Check metadata
-		assert.Equal(t, "openai-agent-gpt-4", spec.Metadata.Name)
+		assert.Equal(t, "llm-agent-openai:gpt-4", spec.Metadata.Name)
 
-		// Check builtin configuration is stored
 		require.NotNil(t, spec.Builtin)
-		assert.Equal(t, "openai-agent", spec.Builtin.Type)
-		assert.Equal(t, "gpt-4", spec.Builtin.Model)
-		assert.Equal(t, "https://api.openai.com/v1", spec.Builtin.BaseURL)
-		assert.Equal(t, "test-key", spec.Builtin.APIKey)
-
-		// Check commands
-		require.NotNil(t, spec.Commands.UseVirtualHome)
-		assert.False(t, *spec.Commands.UseVirtualHome)
-		assert.Equal(t, "{{ .URL }}", spec.Commands.ArgTemplateMcpServer)
-		// RunPrompt is empty for OpenAI agents - they use a custom runner
-		assert.Empty(t, spec.Commands.RunPrompt)
+		assert.Equal(t, "llm-agent", spec.Builtin.Type)
+		assert.Equal(t, "openai:gpt-4", spec.Builtin.Model)
 	})
 }
 
