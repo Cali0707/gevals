@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"sync"
 
 	"github.com/mcpchecker/mcpchecker/pkg/acpclient"
 	"github.com/mcpchecker/mcpchecker/pkg/llmagent"
@@ -83,7 +84,8 @@ type llmACPTransport struct {
 	agentToClientReader *io.PipeReader
 	agentToClientWriter *io.PipeWriter
 
-	done chan error
+	closeOnce sync.Once
+	done      chan error
 }
 
 var _ acpclient.Transport = &llmACPTransport{}
@@ -116,19 +118,21 @@ func (t *llmACPTransport) Start(_ context.Context) (stdin io.Writer, stdout io.R
 }
 
 func (t *llmACPTransport) Close(ctx context.Context) error {
-	t.cancel()
-
-	t.clientToAgentWriter.Close()
-	t.clientToAgentReader.Close()
-	t.agentToClientWriter.Close()
-	t.agentToClientReader.Close()
-
 	var err error
-	select {
-	case err = <-t.done:
-	case <-ctx.Done():
-		err = ctx.Err()
-	}
+	t.closeOnce.Do(func() {
+		t.cancel()
+
+		t.clientToAgentWriter.Close()
+		t.clientToAgentReader.Close()
+		t.agentToClientWriter.Close()
+		t.agentToClientReader.Close()
+
+		select {
+		case err = <-t.done:
+		case <-ctx.Done():
+			err = ctx.Err()
+		}
+	})
 
 	return errors.Join(err)
 }

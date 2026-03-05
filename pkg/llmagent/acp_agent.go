@@ -30,6 +30,7 @@ type acpAgent struct {
 var _ acp.Agent = &acpAgent{}
 
 type acpSession struct {
+	mu            sync.Mutex
 	ctx           context.Context
 	sessionCancel context.CancelFunc
 	promptCancel  context.CancelFunc
@@ -168,23 +169,23 @@ func (a *acpAgent) Prompt(ctx context.Context, params acp.PromptRequest) (acp.Pr
 	}
 
 	// cancel any previous turn
-	a.mu.Lock()
+	s.mu.Lock()
 	if s.promptCancel != nil {
 		cancelPrev := s.promptCancel
-		a.mu.Unlock()
+		s.mu.Unlock()
 		cancelPrev()
 	} else {
-		a.mu.Unlock()
+		s.mu.Unlock()
 	}
 
 	promptCtx, promptCancel := context.WithCancel(s.ctx)
 	defer promptCancel()
 
-	a.mu.Lock()
+	s.mu.Lock()
 	s.promptGen++
 	myGen := s.promptGen
 	s.promptCancel = promptCancel
-	a.mu.Unlock()
+	s.mu.Unlock()
 
 	var promptBuilder strings.Builder
 	for _, p := range params.Prompt {
@@ -241,11 +242,11 @@ func (a *acpAgent) Prompt(ctx context.Context, params acp.PromptRequest) (acp.Pr
 	})
 
 	// Only clear cancel if it's still ours (another Prompt may have started)
-	a.mu.Lock()
+	s.mu.Lock()
 	if s.promptGen == myGen {
 		s.promptCancel = nil
 	}
-	a.mu.Unlock()
+	s.mu.Unlock()
 
 	if err != nil {
 		if promptCtx.Err() != nil {
@@ -312,8 +313,13 @@ func (a *acpAgent) toolInterceptorForSession(sessionId acp.SessionId) toolInterc
 }
 
 func (s *acpSession) cleanup() {
-	if s.promptCancel != nil {
-		s.promptCancel()
+	s.mu.Lock()
+	cancelPrompt := s.promptCancel
+	s.promptCancel = nil
+	s.mu.Unlock()
+
+	if cancelPrompt != nil {
+		cancelPrompt()
 	}
 	if s.sessionCancel != nil {
 		s.sessionCancel()

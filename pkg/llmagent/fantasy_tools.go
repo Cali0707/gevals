@@ -50,7 +50,10 @@ func (t *mcpTool) Info() fantasy.ToolInfo {
 				}
 			}
 			if req, ok := schemaMap["required"]; ok {
-				if reqArr, ok := req.([]any); ok {
+				switch reqArr := req.(type) {
+				case []string:
+					info.Required = reqArr
+				case []any:
 					required := make([]string, 0, len(reqArr))
 					for _, r := range reqArr {
 						if s, ok := r.(string); ok {
@@ -84,11 +87,11 @@ func (t *mcpTool) Run(ctx context.Context, call fantasy.ToolCall) (fantasy.ToolR
 	var args map[string]any
 	if call.Input != "" {
 		if err := json.Unmarshal([]byte(call.Input), &args); err != nil {
-			return fantasy.ToolResponse{}, fmt.Errorf("failed to parse tool arguments: %w", err)
+			return fantasy.NewTextErrorResponse(fmt.Sprintf("failed to parse tool arguments: %v", err)), nil
 		}
 	}
 
-	result, err := t.client.CallTool(ctx, call.Name, args)
+	result, err := t.client.CallTool(ctx, t.tool.Name, args)
 	if err != nil {
 		return fantasy.NewTextErrorResponse(fmt.Sprintf("Error calling tool: %v", err)), nil
 	}
