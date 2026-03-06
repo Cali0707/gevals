@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/fatih/color"
 	"github.com/mcpchecker/mcpchecker/pkg/eval"
@@ -20,6 +22,7 @@ func NewEvalCmd() *cobra.Command {
 	var verbose bool
 	var run string
 	var labelSelector string
+	var parallelWorkers int
 
 	cmd := &cobra.Command{
 		Use:   "check [eval-config-file]",
@@ -27,6 +30,7 @@ func NewEvalCmd() *cobra.Command {
 		Long:  `Run an evaluation using the specified eval configuration file.`,
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			startTime := time.Now()
 			configFile := args[0]
 
 			// Load eval spec
@@ -43,7 +47,9 @@ func NewEvalCmd() *cobra.Command {
 			}
 
 			// Create runner
-			runner, err := eval.NewRunner(spec)
+			runner, err := eval.NewRunner(spec, eval.RunnerOptions{
+				ParallelWorkers: parallelWorkers,
+			})
 			if err != nil {
 				return fmt.Errorf("failed to create eval runner: %w", err)
 			}
@@ -64,11 +70,19 @@ func NewEvalCmd() *cobra.Command {
 			if err := saveResultsToFile(results, outputFile); err != nil {
 				return fmt.Errorf("failed to save results to file: %w", err)
 			}
-			fmt.Printf("\n📄 Results saved to: %s\n", outputFile)
+			if outputFormat == "text" {
+				fmt.Printf("\n📄 Results saved to: %s\n", outputFile)
+			}
 
 			// Display results
 			if err := displayResults(results, outputFormat); err != nil {
 				return fmt.Errorf("failed to display results: %w", err)
+			}
+
+			// Print elapsed time (only for text output to keep JSON machine-readable)
+			if outputFormat == "text" {
+				elapsed := time.Since(startTime)
+				fmt.Printf("⏱️  Completed in %s\n", formatDuration(elapsed))
 			}
 
 			return nil
@@ -79,12 +93,14 @@ func NewEvalCmd() *cobra.Command {
 	cmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "Verbose output")
 	cmd.Flags().StringVarP(&run, "run", "r", "", "Regular expression to match task names to run (unanchored, like go test -run)")
 	cmd.Flags().StringVarP(&labelSelector, "label-selector", "l", "", "Filter taskSets by label (format: key=value, e.g., suite=kubernetes)")
+	cmd.Flags().IntVarP(&parallelWorkers, "parallel", "p", 1, "Number of parallel workers for tasks marked as parallel (1 = sequential)")
 
 	return cmd
 }
 
 // progressDisplay handles interactive progress display
 type progressDisplay struct {
+	mu      sync.Mutex
 	verbose bool
 	green   *color.Color
 	red     *color.Color
@@ -104,63 +120,83 @@ func newProgressDisplay(verbose bool) *progressDisplay {
 	}
 }
 
+// taskPrefix returns a prefix for progress output. For parallel tasks, includes task name.
+func taskPrefix(task *eval.EvalResult) string {
+	if task != nil && task.Parallel {
+		return fmt.Sprintf("[%s] ", task.TaskName)
+	}
+	return "  "
+}
+
 func (d *progressDisplay) handleProgress(event eval.ProgressEvent) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	prefix := taskPrefix(event.Task)
+
 	switch event.Type {
 	case eval.EventEvalStart:
 		d.bold.Println("\n=== Starting Evaluation ===")
 
 	case eval.EventTaskStart:
 		fmt.Println()
-		d.cyan.Printf("Task: %s\n", event.Task.TaskName)
-		if event.Task.Difficulty != "" {
-			fmt.Printf("  Difficulty: %s\n", event.Task.Difficulty)
+		if event.Task.Parallel {
+			if event.Task.Difficulty != "" {
+				d.cyan.Printf("[%s] Starting (parallel, %s)\n", event.Task.TaskName, event.Task.Difficulty)
+			} else {
+				d.cyan.Printf("[%s] Starting (parallel)\n", event.Task.TaskName)
+			}
+		} else {
+			d.cyan.Printf("Task: %s\n", event.Task.TaskName)
+			if event.Task.Difficulty != "" {
+				fmt.Printf("  Difficulty: %s\n", event.Task.Difficulty)
+			}
 		}
 
 	case eval.EventTaskSetup:
 		if d.verbose {
-			fmt.Printf("  → Setting up task environment...\n")
+			fmt.Printf("%s→ Setting up task environment...\n", prefix)
 		}
 
 	case eval.EventTaskRunning:
-		fmt.Printf("  → Running agent...\n")
+		fmt.Printf("%s→ Running agent...\n", prefix)
 
 	case eval.EventTaskVerifying:
-		fmt.Printf("  → Verifying results...\n")
+		fmt.Printf("%s→ Verifying results...\n", prefix)
 
 	case eval.EventTaskAssertions:
 		if d.verbose {
-			fmt.Printf("  → Evaluating assertions...\n")
+			fmt.Printf("%s→ Evaluating assertions...\n", prefix)
 		}
 
 	case eval.EventTaskError:
 		task := event.Task
-		d.red.Printf("  ✗ Task failed during setup\n")
+		d.red.Printf("%s✗ Task failed during setup\n", prefix)
 		if task.TaskError != "" {
-			fmt.Printf("    Error: %s\n", task.TaskError)
+			fmt.Printf("%s  Error: %s\n", prefix, task.TaskError)
 		}
 
 	case eval.EventTaskComplete:
 		task := event.Task
 		if task.TaskPassed && task.AllAssertionsPassed {
-			d.green.Printf("  ✓ Task passed\n")
+			d.green.Printf("%s✓ Task passed\n", prefix)
 		} else if task.TaskPassed && !task.AllAssertionsPassed {
-			d.yellow.Printf("  ~ Task passed but assertions failed\n")
+			d.yellow.Printf("%s~ Task passed but assertions failed\n", prefix)
 		} else {
 			if task.AgentExecutionError {
-				d.red.Printf("  ✗ Agent failed to run\n")
+				d.red.Printf("%s✗ Agent failed to run\n", prefix)
 				if task.TaskError != "" || task.TaskOutput != "" {
 					errorFile, err := saveErrorToFile(task.TaskName, task.TaskError, task.TaskOutput)
 					if err != nil {
-						// If we can't save to file, fall back to printing inline
-						fmt.Printf("    Error: %s\n", task.TaskError)
+						fmt.Printf("%s  Error: %s\n", prefix, task.TaskError)
 					} else {
-						fmt.Printf("    Error details saved to: %s\n", errorFile)
+						fmt.Printf("%s  Error details saved to: %s\n", prefix, errorFile)
 					}
 				}
 			} else {
-				d.red.Printf("  ✗ Task failed\n")
+				d.red.Printf("%s✗ Task failed\n", prefix)
 				if task.TaskError != "" {
-					fmt.Printf("    Error: %s\n", task.TaskError)
+					fmt.Printf("%s  Error: %s\n", prefix, task.TaskError)
 				}
 			}
 		}
@@ -480,4 +516,22 @@ func saveErrorToFile(taskName, taskError, taskOutput string) (string, error) {
 	}
 
 	return absPath, nil
+}
+
+// formatDuration formats a duration in a human-readable way
+func formatDuration(d time.Duration) string {
+	if d < time.Second {
+		return fmt.Sprintf("%dms", d.Milliseconds())
+	}
+	if d < time.Minute {
+		return fmt.Sprintf("%.1fs", d.Seconds())
+	}
+	minutes := int(d.Minutes())
+	seconds := int(d.Seconds()) % 60
+	if minutes < 60 {
+		return fmt.Sprintf("%dm%ds", minutes, seconds)
+	}
+	hours := minutes / 60
+	minutes = minutes % 60
+	return fmt.Sprintf("%dh%dm%ds", hours, minutes, seconds)
 }
