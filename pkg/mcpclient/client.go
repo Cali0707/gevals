@@ -19,8 +19,12 @@ type Client struct {
 func Connect(ctx context.Context, cfg *ServerConfig) (*Client, error) {
 	var transport mcp.Transport
 	if cfg.IsHttp() {
+		hdrs := make(http.Header, len(cfg.Headers))
+		for k, v := range cfg.Headers {
+			hdrs.Set(k, v)
+		}
 		client := &http.Client{
-			Transport: NewHeaderRoundTripper(cfg.Headers, nil),
+			Transport: NewHeaderRoundTripper(hdrs, nil),
 		}
 
 		transport = &mcp.StreamableClientTransport{

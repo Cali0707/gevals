@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/http"
 	"strings"
 	"sync"
 	"time"
@@ -112,9 +113,9 @@ func (a *acpAgent) NewSession(ctx context.Context, params acp.NewSessionRequest)
 			// TODO:maybe revisit this in the future
 			continue
 		}
-		hdrs := make(map[string]string, len(srv.Http.Headers))
+		hdrs := make(http.Header, len(srv.Http.Headers))
 		for _, h := range srv.Http.Headers {
-			hdrs[h.Name] = h.Value
+			hdrs.Add(h.Name, h.Value)
 		}
 
 		client, err := NewMcpClient(ctx, srv.Http.Url, hdrs)

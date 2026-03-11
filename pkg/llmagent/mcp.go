@@ -23,7 +23,7 @@ type mcpClient struct {
 	tools   []mcpsdk.Tool
 }
 
-func NewMcpClient(ctx context.Context, serverURL string, headers map[string]string) (McpClient, error) {
+func NewMcpClient(ctx context.Context, serverURL string, headers http.Header) (McpClient, error) {
 	mc := &mcpClient{}
 
 	client := mcpsdk.NewClient(&mcpsdk.Implementation{
