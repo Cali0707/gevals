@@ -122,12 +122,17 @@ func (c *client) run(ctx context.Context, prompt string, servers mcpproxy.Server
 			return nil, acp.PromptResponse{}, fmt.Errorf("failed to get config for mcp server %q: %w", srv.GetName(), err)
 		}
 
+		headers := make([]acp.HttpHeader, 0, len(cfg.Headers))
+		for k, v := range cfg.Headers {
+			headers = append(headers, acp.HttpHeader{Name: k, Value: v})
+		}
+
 		mcpServers = append(mcpServers, acp.McpServer{
 			Http: &acp.McpServerHttp{
 				Name:    srv.GetName(),
 				Url:     cfg.URL,
 				Type:    mcpclient.TransportTypeHttp,
-				Headers: make([]acp.HttpHeader, 0),
+				Headers: headers,
 			},
 		})
 	}
