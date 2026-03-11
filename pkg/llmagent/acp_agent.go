@@ -112,7 +112,12 @@ func (a *acpAgent) NewSession(ctx context.Context, params acp.NewSessionRequest)
 			// TODO:maybe revisit this in the future
 			continue
 		}
-		client, err := NewMcpClient(ctx, srv.Http.Url)
+		hdrs := make(map[string]string, len(srv.Http.Headers))
+		for _, h := range srv.Http.Headers {
+			hdrs[h.Name] = h.Value
+		}
+
+		client, err := NewMcpClient(ctx, srv.Http.Url, hdrs)
 		if err != nil {
 			for _, c := range mcpClients {
 				c.Close()

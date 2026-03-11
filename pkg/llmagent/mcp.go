@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"sync"
 
+	"github.com/mcpchecker/mcpchecker/pkg/mcpclient"
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -21,7 +23,7 @@ type mcpClient struct {
 	tools   []mcpsdk.Tool
 }
 
-func NewMcpClient(ctx context.Context, serverURL string) (McpClient, error) {
+func NewMcpClient(ctx context.Context, serverURL string, headers map[string]string) (McpClient, error) {
 	mc := &mcpClient{}
 
 	client := mcpsdk.NewClient(&mcpsdk.Implementation{
@@ -35,6 +37,12 @@ func NewMcpClient(ctx context.Context, serverURL string) (McpClient, error) {
 
 	transport := &mcpsdk.StreamableClientTransport{
 		Endpoint: serverURL,
+	}
+
+	if len(headers) > 0 {
+		transport.HTTPClient = &http.Client{
+			Transport: mcpclient.NewHeaderRoundTripper(headers, nil),
+		}
 	}
 
 	session, err := client.Connect(ctx, transport, nil)
