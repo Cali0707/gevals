@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mcpchecker/mcpchecker/pkg/agent"
 	"github.com/mcpchecker/mcpchecker/pkg/eval"
+	"github.com/mcpchecker/mcpchecker/pkg/tokens"
 )
 
 func TestSummaryCommand(t *testing.T) {
@@ -196,14 +196,14 @@ func TestBuildSummaryOutputWithTokenUsage(t *testing.T) {
 			TaskName:            "task-1",
 			TaskPassed:          true,
 			AllAssertionsPassed: true,
-			TokenEstimate: &agent.TokenEstimate{
+			TokenEstimate: &tokens.Estimate{
 				TotalTokens: 1000,
-				Actual: &agent.ActualUsage{
+				Actual: &tokens.Usage{
 					InputTokens:  600,
 					OutputTokens: 400,
 				},
 			},
-			JudgeTokenUsage: &agent.ActualUsage{
+			JudgeTokenUsage: &tokens.Usage{
 				InputTokens:  200,
 				OutputTokens: 100,
 			},
@@ -212,14 +212,14 @@ func TestBuildSummaryOutputWithTokenUsage(t *testing.T) {
 			TaskName:            "task-2",
 			TaskPassed:          true,
 			AllAssertionsPassed: true,
-			TokenEstimate: &agent.TokenEstimate{
+			TokenEstimate: &tokens.Estimate{
 				TotalTokens: 500,
-				Actual: &agent.ActualUsage{
+				Actual: &tokens.Usage{
 					InputTokens:  300,
 					OutputTokens: 200,
 				},
 			},
-			JudgeTokenUsage: &agent.ActualUsage{
+			JudgeTokenUsage: &tokens.Usage{
 				InputTokens:  150,
 				OutputTokens: 50,
 			},
@@ -262,14 +262,14 @@ func TestOutputGitHubSummaryContent(t *testing.T) {
 			AssertionResults: &eval.CompositeAssertionResult{
 				ToolsUsed: &eval.SingleAssertionResult{Passed: true},
 			},
-			TokenEstimate: &agent.TokenEstimate{
+			TokenEstimate: &tokens.Estimate{
 				TotalTokens: 1000,
-				Actual: &agent.ActualUsage{
+				Actual: &tokens.Usage{
 					InputTokens:  600,
 					OutputTokens: 400,
 				},
 			},
-			JudgeTokenUsage: &agent.ActualUsage{
+			JudgeTokenUsage: &tokens.Usage{
 				InputTokens:  200,
 				OutputTokens: 100,
 			},

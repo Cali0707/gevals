@@ -10,15 +10,16 @@ import (
 	"sync"
 
 	"github.com/coder/acp-go-sdk"
-	"github.com/mcpchecker/mcpchecker/pkg/mcpproxy"
 	"github.com/mcpchecker/mcpchecker/pkg/mcpclient"
+	"github.com/mcpchecker/mcpchecker/pkg/mcpproxy"
+	"github.com/mcpchecker/mcpchecker/pkg/tokens"
 )
 
 // RunResult contains the results of running a prompt, including session updates
 // and any usage data reported by the agent.
 type RunResult struct {
 	Updates []acp.SessionUpdate
-	Usage   *Usage // Actual token usage from agent (nil if not reported)
+	Usage   *tokens.Usage // Actual token usage from agent (nil if not reported)
 }
 
 type Client interface {

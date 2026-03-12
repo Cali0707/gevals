@@ -5,17 +5,8 @@ import (
 	"strconv"
 
 	"github.com/coder/acp-go-sdk"
+	"github.com/mcpchecker/mcpchecker/pkg/tokens"
 )
-
-// Usage represents token usage data from an agent.
-type Usage struct {
-	InputTokens       int64  `json:"input_tokens"`
-	OutputTokens      int64  `json:"output_tokens"`
-	TotalTokens       int64  `json:"total_tokens"`
-	ThoughtTokens     *int64 `json:"thought_tokens,omitempty"`
-	CachedReadTokens  *int64 `json:"cached_read_tokens,omitempty"`
-	CachedWriteTokens *int64 `json:"cached_write_tokens,omitempty"`
-}
 
 // ExtractUsageFromPromptResponse attempts to extract usage data from the
 // PromptResponse Meta field. Returns nil if no usage data is found.
@@ -23,7 +14,7 @@ type Usage struct {
 // Usage is extracted from Meta until a dedicated Usage field is added directly
 // to the PromptResponse, as proposed in:
 // https://agentclientprotocol.com/rfds/session-usage#context-window-and-cost-via-session%2Fupdate
-func ExtractUsageFromPromptResponse(resp acp.PromptResponse) *Usage {
+func ExtractUsageFromPromptResponse(resp acp.PromptResponse) *tokens.Usage {
 	if resp.Meta == nil {
 		return nil
 	}
@@ -34,8 +25,8 @@ func ExtractUsageFromPromptResponse(resp acp.PromptResponse) *Usage {
 // of session updates. Returns the LAST usage found since token counts are
 // typically cumulative and reported at the end of a session.
 // Returns nil if no usage data is found.
-func ExtractUsageFromMeta(updates []acp.SessionUpdate) *Usage {
-	var lastUsage *Usage
+func ExtractUsageFromMeta(updates []acp.SessionUpdate) *tokens.Usage {
+	var lastUsage *tokens.Usage
 	for _, update := range updates {
 		// Check AgentMessageChunk Meta
 		if update.AgentMessageChunk != nil && update.AgentMessageChunk.Meta != nil {
@@ -61,7 +52,7 @@ func ExtractUsageFromMeta(updates []acp.SessionUpdate) *Usage {
 
 // parseUsageFromMeta tries to extract usage from a Meta field (any type).
 // The Meta field could be a map with usage data embedded.
-func parseUsageFromMeta(meta any) *Usage {
+func parseUsageFromMeta(meta any) *tokens.Usage {
 	m, ok := meta.(map[string]any)
 	if !ok {
 		return nil
@@ -79,7 +70,7 @@ func parseUsageFromMeta(meta any) *Usage {
 		return nil
 	}
 
-	usage := &Usage{}
+	usage := &tokens.Usage{}
 
 	if v, ok := toInt64(usageMap["input_tokens"]); ok {
 		usage.InputTokens = v

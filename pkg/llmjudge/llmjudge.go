@@ -9,7 +9,7 @@ import (
 	"github.com/openai/openai-go/v2"
 	"github.com/openai/openai-go/v2/option"
 
-	"github.com/mcpchecker/mcpchecker/pkg/usage"
+	"github.com/mcpchecker/mcpchecker/pkg/tokens"
 )
 
 const (
@@ -53,10 +53,10 @@ type LLMJudge interface {
 }
 
 type LLMJudgeResult struct {
-	Passed          bool              `json:"passed"`
-	Reason          string            `json:"reason"`
-	FailureCategory string            `json:"failureCategory"`
-	Usage           *usage.TokenUsage `json:"usage,omitempty"`
+	Passed          bool          `json:"passed"`
+	Reason          string        `json:"reason"`
+	FailureCategory string        `json:"failureCategory"`
+	Usage           *tokens.Usage `json:"usage,omitempty"`
 }
 
 type llmJudge struct {
@@ -195,7 +195,11 @@ func (j *llmJudge) EvaluateText(ctx context.Context, judgeConfig *LLMJudgeStepCo
 		return nil, fmt.Errorf("failed to unmarshall '%s' tool call arguments: %w", submitJudgementFunction.Name, err)
 	}
 
-	result.Usage = usage.FromOpenAIUsage(completion.Usage)
+	result.Usage = &tokens.Usage{
+		InputTokens:  completion.Usage.PromptTokens,
+		OutputTokens: completion.Usage.CompletionTokens,
+		TotalTokens:  completion.Usage.TotalTokens,
+	}
 
 	return result, nil
 }

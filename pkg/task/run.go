@@ -11,11 +11,12 @@ import (
 	"github.com/mcpchecker/mcpchecker/pkg/extension/client"
 	"github.com/mcpchecker/mcpchecker/pkg/mcpclient"
 	"github.com/mcpchecker/mcpchecker/pkg/steps"
+	"github.com/mcpchecker/mcpchecker/pkg/tokens"
 )
 
 // AgentDetails captures structured information from the agent execution.
 type AgentDetails struct {
-	TokenEstimate *agent.TokenEstimate    `json:"tokenEstimate,omitempty"`
+	TokenEstimate *tokens.Estimate        `json:"tokenEstimate,omitempty"`
 	ToolCalls     []agent.ToolCallSummary `json:"toolCalls,omitempty"`
 	FinalMessage  string                  `json:"finalMessage,omitempty"`
 	Thinking      string                  `json:"thinking,omitempty"`

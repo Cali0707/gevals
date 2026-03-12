@@ -1,22 +1,22 @@
-package agent_test
+package agent
 
 import (
 	"testing"
 
-	"github.com/mcpchecker/mcpchecker/pkg/agent"
 	"github.com/mcpchecker/mcpchecker/pkg/mcpproxy"
+	"github.com/mcpchecker/mcpchecker/pkg/tokens"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestRecalculateAggregates(t *testing.T) {
 	tt := map[string]struct {
-		estimate      agent.TokenEstimate
+		estimate      tokens.Estimate
 		expectedInput int64
 		expectedOut   int64
 		expectedTotal int64
 	}{
 		"sums all component fields": {
-			estimate: agent.TokenEstimate{
+			estimate: tokens.Estimate{
 				PromptTokens:          100,
 				MessageTokens:         50,
 				ThinkingTokens:        30,
@@ -27,7 +27,7 @@ func TestRecalculateAggregates(t *testing.T) {
 				ResourceOutputTokens:  15,
 				PromptGetInputTokens:  5,
 				PromptGetOutputTokens: 25,
-				Source:                 agent.TokenSourceEstimated,
+				Source:                tokens.SourceEstimated,
 			},
 			// Input = Prompt(100) + ToolOutput(80) + McpSchema(40) + ResourceOutput(15) + PromptGetOutput(25)
 			expectedInput: 260,
@@ -36,19 +36,19 @@ func TestRecalculateAggregates(t *testing.T) {
 			expectedTotal: 375,
 		},
 		"no-op when source is actual": {
-			estimate: agent.TokenEstimate{
+			estimate: tokens.Estimate{
 				InputTokens:  999,
 				OutputTokens: 888,
 				TotalTokens:  1887,
 				PromptTokens: 100,
-				Source:        agent.TokenSourceActual,
+				Source:       tokens.SourceActual,
 			},
 			expectedInput: 999,
 			expectedOut:   888,
 			expectedTotal: 1887,
 		},
 		"recalculates when source is empty": {
-			estimate: agent.TokenEstimate{
+			estimate: tokens.Estimate{
 				PromptTokens:  50,
 				MessageTokens: 30,
 			},
@@ -71,22 +71,22 @@ func TestRecalculateAggregates(t *testing.T) {
 
 func TestMergeCallHistory(t *testing.T) {
 	tt := map[string]struct {
-		estimate                   agent.TokenEstimate
-		history                    *mcpproxy.CallHistory
-		expectedToolInput          int64
-		expectedToolOutput         int64
-		expectedPromptGetInput     int64
-		expectedPromptGetOutput    int64
-		expectedResourceInput      int64
-		expectedResourceOutput     int64
+		estimate                tokens.Estimate
+		history                 *mcpproxy.CallHistory
+		expectedToolInput       int64
+		expectedToolOutput      int64
+		expectedPromptGetInput  int64
+		expectedPromptGetOutput int64
+		expectedResourceInput   int64
+		expectedResourceOutput  int64
 	}{
 		"nil history is no-op": {
-			estimate:          agent.TokenEstimate{ToolInputTokens: 10},
+			estimate:          tokens.Estimate{ToolInputTokens: 10},
 			history:           nil,
 			expectedToolInput: 10,
 		},
 		"merges prompt and resource fields": {
-			estimate: agent.TokenEstimate{},
+			estimate: tokens.Estimate{},
 			history: &mcpproxy.CallHistory{
 				PromptGets: []*mcpproxy.PromptGet{
 					{Tokens: mcpproxy.NewTokenCount(10, 20)},
@@ -102,7 +102,7 @@ func TestMergeCallHistory(t *testing.T) {
 			expectedResourceOutput:  40,
 		},
 		"skips nil token records": {
-			estimate: agent.TokenEstimate{},
+			estimate: tokens.Estimate{},
 			history: &mcpproxy.CallHistory{
 				PromptGets: []*mcpproxy.PromptGet{
 					{Tokens: nil},
@@ -121,7 +121,7 @@ func TestMergeCallHistory(t *testing.T) {
 			expectedToolInput:       0,
 		},
 		"uses proxy tool tokens when estimate has zero": {
-			estimate: agent.TokenEstimate{ToolInputTokens: 0, ToolOutputTokens: 0},
+			estimate: tokens.Estimate{ToolInputTokens: 0, ToolOutputTokens: 0},
 			history: &mcpproxy.CallHistory{
 				ToolCalls: []*mcpproxy.ToolCall{
 					{Tokens: mcpproxy.NewTokenCount(100, 200)},
@@ -131,7 +131,7 @@ func TestMergeCallHistory(t *testing.T) {
 			expectedToolOutput: 200,
 		},
 		"preserves estimate tool tokens when non-zero": {
-			estimate: agent.TokenEstimate{ToolInputTokens: 50, ToolOutputTokens: 60},
+			estimate: tokens.Estimate{ToolInputTokens: 50, ToolOutputTokens: 60},
 			history: &mcpproxy.CallHistory{
 				ToolCalls: []*mcpproxy.ToolCall{
 					{Tokens: mcpproxy.NewTokenCount(999, 999)},
@@ -161,7 +161,7 @@ func TestComputeTokenEstimate(t *testing.T) {
 		prompt    string
 		message   string
 		thinking  string
-		toolCalls []agent.ToolCallSummary
+		toolCalls []ToolCallSummary
 
 		expectPromptNonZero    bool
 		expectMessageNonZero   bool
@@ -173,23 +173,23 @@ func TestComputeTokenEstimate(t *testing.T) {
 		expectNoError          bool
 	}{
 		"empty inputs": {
-			expectNoError:      true,
+			expectNoError:        true,
 			expectZeroToolInput:  true,
 			expectZeroToolOutput: true,
 		},
 		"prompt and message produce tokens": {
-			prompt:               "What is the meaning of life?",
-			message:              "The answer is 42.",
-			thinking:             "Let me think about this question.",
-			expectPromptNonZero:  true,
-			expectMessageNonZero: true,
+			prompt:                "What is the meaning of life?",
+			message:               "The answer is 42.",
+			thinking:              "Let me think about this question.",
+			expectPromptNonZero:   true,
+			expectMessageNonZero:  true,
 			expectThinkingNonZero: true,
-			expectZeroToolInput:  true,
-			expectZeroToolOutput: true,
-			expectNoError:        true,
+			expectZeroToolInput:   true,
+			expectZeroToolOutput:  true,
+			expectNoError:         true,
 		},
 		"tool calls produce tokens": {
-			toolCalls: []agent.ToolCallSummary{
+			toolCalls: []ToolCallSummary{
 				{
 					Title:     "tool1",
 					RawInput:  map[string]any{"query": "hello world"},
@@ -201,7 +201,7 @@ func TestComputeTokenEstimate(t *testing.T) {
 			expectNoError:          true,
 		},
 		"nil tool call input/output produce zero": {
-			toolCalls: []agent.ToolCallSummary{
+			toolCalls: []ToolCallSummary{
 				{Title: "tool1", RawInput: nil, RawOutput: nil},
 			},
 			expectZeroToolInput:  true,
@@ -212,7 +212,12 @@ func TestComputeTokenEstimate(t *testing.T) {
 
 	for name, tc := range tt {
 		t.Run(name, func(t *testing.T) {
-			estimate := agent.ComputeTokenEstimate(tc.prompt, tc.message, tc.thinking, tc.toolCalls)
+			estimate := tokens.ComputeEstimate(
+				tc.prompt,
+				tc.message,
+				tc.thinking,
+				toolCallSummaryToToolCallData(tc.toolCalls),
+			)
 
 			if tc.expectPromptNonZero {
 				assert.Greater(t, estimate.PromptTokens, int64(0))
@@ -244,7 +249,7 @@ func TestComputeTokenEstimate(t *testing.T) {
 
 func TestRecalculateAggregates_AfterMerge(t *testing.T) {
 	// End-to-end: compute estimate, merge call history, recalculate, verify identity holds.
-	estimate := agent.ComputeTokenEstimate("test prompt", "test message", "", nil)
+	estimate := tokens.ComputeEstimate("test prompt", "test message", "", nil)
 
 	history := &mcpproxy.CallHistory{
 		ToolCalls: []*mcpproxy.ToolCall{

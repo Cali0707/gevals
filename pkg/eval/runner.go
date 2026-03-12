@@ -17,7 +17,7 @@ import (
 	"github.com/mcpchecker/mcpchecker/pkg/mcpclient"
 	"github.com/mcpchecker/mcpchecker/pkg/mcpproxy"
 	"github.com/mcpchecker/mcpchecker/pkg/task"
-	"github.com/mcpchecker/mcpchecker/pkg/usage"
+	"github.com/mcpchecker/mcpchecker/pkg/tokens"
 	"github.com/mcpchecker/mcpchecker/pkg/util"
 )
 
@@ -40,10 +40,10 @@ type EvalResult struct {
 
 	// TokenEstimate contains token count estimates from agent execution.
 	// Uses tiktoken (cl100k_base encoding). Excludes system prompt and cache tokens.
-	TokenEstimate *agent.TokenEstimate `json:"tokenEstimate,omitempty"`
+	TokenEstimate *tokens.Estimate `json:"tokenEstimate,omitempty"`
 
 	// JudgeTokenUsage contains token usage from LLM judge.
-	JudgeTokenUsage *agent.ActualUsage `json:"judgeTokenUsage,omitempty"`
+	JudgeTokenUsage *tokens.Usage `json:"judgeTokenUsage,omitempty"`
 
 	// Phase outputs from task execution
 	SetupOutput   *task.PhaseOutput `json:"setupOutput,omitempty"`
@@ -542,7 +542,7 @@ func (r *evalRunner) runTask(
 	// Ensure TokenEstimate exists so MCP token data is always reported,
 	// even on agent failure or shell runner
 	if result.TokenEstimate == nil {
-		result.TokenEstimate = &agent.TokenEstimate{}
+		result.TokenEstimate = &tokens.Estimate{}
 	}
 
 	// Propagate token-counting errors
@@ -667,15 +667,15 @@ func (r *evalRunner) executeTaskSteps(
 
 	// Aggregate judge usage from verify phase steps
 	if verifyOutput != nil {
-		judgeUsage := &usage.TokenUsage{}
+		judgeUsage := &tokens.Usage{}
 		for _, step := range verifyOutput.Steps {
 			if step != nil && step.Type == "llmJudge" && step.Usage != nil {
 				judgeUsage.Add(step.Usage)
 			}
 		}
 
-		if judgeUsage.GetInput() > 0 || judgeUsage.GetOutput() > 0 {
-			result.JudgeTokenUsage = agent.GetActualUsageFromTokenUsage(judgeUsage)
+		if judgeUsage.InputTokens > 0 || judgeUsage.OutputTokens > 0 {
+			result.JudgeTokenUsage = judgeUsage
 		}
 	}
 
