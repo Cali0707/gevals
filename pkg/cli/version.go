@@ -21,12 +21,16 @@ func NewVersionCmd() *cobra.Command {
 		Use:   "version",
 		Short: "Print version information",
 		Run: func(cmd *cobra.Command, args []string) {
-			// Show commit for dev builds, but not for clean releases (vX.Y.Z)
-			if Commit != "" && !semverRegex.MatchString(Version) {
-				fmt.Printf("mcpchecker version %s@%s\n", Version, Commit)
-			} else {
-				fmt.Printf("mcpchecker version %s\n", Version)
-			}
+			fmt.Printf("mcpchecker version %s\n", version())
 		},
+	}
+}
+
+func version() string {
+	// Show commit for dev builds, but not for clean releases (vX.Y.Z)
+	if Commit != "" && !semverRegex.MatchString(Version) {
+		return fmt.Sprintf("%s@%s", Version, Commit)
+	} else {
+		return Version
 	}
 }
