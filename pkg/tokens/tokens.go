@@ -91,19 +91,22 @@ func (u *Usage) Add(other *Usage) {
 	u.TotalTokens += other.TotalTokens
 
 	// take the only non nil field if one is set, else accumulate
-	if u.ThoughtTokens == nil {
-		u.ThoughtTokens = other.ThoughtTokens
-	} else if other.ThoughtTokens != nil {
+	if u.ThoughtTokens == nil && other.ThoughtTokens != nil {
+		v := *other.ThoughtTokens
+		u.ThoughtTokens = &v
+	} else if u.ThoughtTokens != nil && other.ThoughtTokens != nil {
 		*u.ThoughtTokens += *other.ThoughtTokens
 	}
-	if u.CachedReadTokens == nil {
-		u.CachedReadTokens = other.CachedReadTokens
-	} else if other.CachedReadTokens != nil {
+	if u.CachedReadTokens == nil && other.CachedReadTokens != nil {
+		v := *other.CachedReadTokens
+		u.CachedReadTokens = &v
+	} else if u.CachedReadTokens != nil && other.CachedReadTokens != nil {
 		*u.CachedReadTokens += *other.CachedReadTokens
 	}
-	if u.CachedWriteTokens == nil {
-		u.CachedWriteTokens = other.CachedWriteTokens
-	} else if other.CachedWriteTokens != nil {
+	if u.CachedWriteTokens == nil && other.CachedWriteTokens != nil {
+		v := *other.CachedWriteTokens
+		u.CachedWriteTokens = &v
+	} else if u.CachedWriteTokens != nil && other.CachedWriteTokens != nil {
 		*u.CachedWriteTokens += *other.CachedWriteTokens
 	}
 }
