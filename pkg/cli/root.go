@@ -11,6 +11,7 @@ func NewRootCmd() *cobra.Command {
 		Short: "MCP evaluation framework",
 		Long: `mcpchecker is a framework for evaluating MCP agents against tasks.
 It runs agents through defined tasks and validates their behavior using assertions.`,
+		Version: version(),
 	}
 
 	// Add subcommands
