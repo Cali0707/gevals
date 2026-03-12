@@ -167,17 +167,18 @@ func (e *Estimate) MergeCallHistory(history *mcpproxy.CallHistory) {
 	}
 
 	// For tool I/O: skip each field independently if already populated (ACP mode)
-	if e.ToolInputTokens == 0 || e.ToolOutputTokens == 0 {
-		for _, tc := range history.ToolCalls {
-			if tc.Tokens != nil {
-				if e.ToolInputTokens == 0 {
-					e.ToolInputTokens += tc.Tokens.InputTokens
-				}
-				if e.ToolOutputTokens == 0 {
-					e.ToolOutputTokens += tc.Tokens.OutputTokens
-				}
-			}
+	var toolIn, toolOut int64
+	for _, tc := range history.ToolCalls {
+		if tc.Tokens != nil {
+			toolIn += tc.Tokens.InputTokens
+			toolOut += tc.Tokens.OutputTokens
 		}
+	}
+	if e.ToolInputTokens == 0 {
+		e.ToolInputTokens = toolIn
+	}
+	if e.ToolOutputTokens == 0 {
+		e.ToolOutputTokens = toolOut
 	}
 
 	// Prompt and resource fields always come from CallHistory
