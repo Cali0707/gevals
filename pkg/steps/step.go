@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/mcpchecker/mcpchecker/pkg/usage"
+	"github.com/mcpchecker/mcpchecker/pkg/tokens"
 )
 
 const (
@@ -32,12 +32,12 @@ type StepInput struct {
 }
 
 type StepOutput struct {
-	Type    string              `json:"type,omitempty"`
-	Success bool                `json:"success"`
-	Message string              `json:"message,omitempty"`
-	Outputs map[string]string   `json:"outputs,omitempty"`
-	Error   string              `json:"error,omitempty"`
-	Usage   *usage.TokenUsage   `json:"usage,omitempty"`
+	Type    string            `json:"type,omitempty"`
+	Success bool              `json:"success"`
+	Message string            `json:"message,omitempty"`
+	Outputs map[string]string `json:"outputs,omitempty"`
+	Error   string            `json:"error,omitempty"`
+	Usage   *tokens.Usage     `json:"usage,omitempty"`
 }
 
 type AgentContext struct {

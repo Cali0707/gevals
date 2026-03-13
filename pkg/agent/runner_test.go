@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/mcpchecker/mcpchecker/pkg/mcpproxy"
+	"github.com/mcpchecker/mcpchecker/pkg/tokens"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -17,7 +18,7 @@ func TestComputeTokenEstimate_NilRawInputOutput(t *testing.T) {
 		{Title: "tool3", RawInput: nil, RawOutput: nil},
 	}
 
-	estimate := ComputeTokenEstimate("", "", "", toolCalls)
+	estimate := tokens.ComputeEstimate("", "", "", toolCallSummaryToToolCallData(toolCalls))
 
 	assert.Equal(t, int64(0), estimate.ToolInputTokens, "nil RawInput should contribute 0 tokens, not 1 per tool call")
 	assert.Equal(t, int64(0), estimate.ToolOutputTokens, "nil RawOutput should contribute 0 tokens, not 1 per tool call")
@@ -32,7 +33,7 @@ func TestComputeTokenEstimate_WithRawInputOutput(t *testing.T) {
 		},
 	}
 
-	estimate := ComputeTokenEstimate("", "", "", toolCalls)
+	estimate := tokens.ComputeEstimate("", "", "", toolCallSummaryToToolCallData(toolCalls))
 
 	assert.Greater(t, estimate.ToolInputTokens, int64(1), "real RawInput should produce more than 1 token")
 	assert.Greater(t, estimate.ToolOutputTokens, int64(1), "real RawOutput should produce more than 1 token")
@@ -44,7 +45,7 @@ func TestComputeTokenEstimate_MixedNilAndReal(t *testing.T) {
 		{Title: "tool2", RawInput: map[string]any{"query": "test"}, RawOutput: map[string]any{"result": "ok"}},
 	}
 
-	estimate := ComputeTokenEstimate("", "", "", toolCalls)
+	estimate := tokens.ComputeEstimate("", "", "", toolCallSummaryToToolCallData(toolCalls))
 
 	// Only the second tool call (with real data) should contribute tokens.
 	// The nil tool call should add 0, not 1.
@@ -59,7 +60,7 @@ func TestMergeCallHistory_NilRawInputFallsThrough(t *testing.T) {
 	toolCalls := []ToolCallSummary{
 		{Title: "tool1", RawInput: nil, RawOutput: nil},
 	}
-	estimate := ComputeTokenEstimate("", "", "", toolCalls)
+	estimate := tokens.ComputeEstimate("", "", "", toolCallSummaryToToolCallData(toolCalls))
 
 	history := &mcpproxy.CallHistory{
 		ToolCalls: []*mcpproxy.ToolCall{
@@ -83,7 +84,7 @@ func TestMergeCallHistory_RealRawInputSkipsMerge(t *testing.T) {
 			RawOutput: map[string]any{"result": "some response data"},
 		},
 	}
-	estimate := ComputeTokenEstimate("", "", "", toolCalls)
+	estimate := tokens.ComputeEstimate("", "", "", toolCallSummaryToToolCallData(toolCalls))
 	originalInput := estimate.ToolInputTokens
 	originalOutput := estimate.ToolOutputTokens
 

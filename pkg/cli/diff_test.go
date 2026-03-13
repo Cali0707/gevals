@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mcpchecker/mcpchecker/pkg/agent"
 	"github.com/mcpchecker/mcpchecker/pkg/eval"
+	"github.com/mcpchecker/mcpchecker/pkg/tokens"
 )
 
 func TestDiffCommand(t *testing.T) {
@@ -221,11 +221,11 @@ func TestFormatTokenChangeMarkdown(t *testing.T) {
 		head     int64
 		contains string
 	}{
-		{1000, 1500, "🔴"},  // increase is bad
-		{1500, 1000, "🟢"},  // decrease is good
-		{1000, 1000, "➖"},  // no change
-		{0, 1000, "🔴"},     // base is 0, increase still bad
-		{0, 0, "➖"},        // both 0
+		{1000, 1500, "🔴"}, // increase is bad
+		{1500, 1000, "🟢"}, // decrease is good
+		{1000, 1000, "➖"}, // no change
+		{0, 1000, "🔴"},    // base is 0, increase still bad
+		{0, 0, "➖"},       // both 0
 	}
 
 	for _, tt := range tests {
@@ -269,7 +269,7 @@ func TestCalculateDiffWithTokens(t *testing.T) {
 		{
 			TaskName:   "task-1",
 			TaskPassed: true,
-			TokenEstimate: &agent.TokenEstimate{
+			TokenEstimate: &tokens.Estimate{
 				TotalTokens:     10000,
 				McpSchemaTokens: 2000,
 			},
@@ -277,7 +277,7 @@ func TestCalculateDiffWithTokens(t *testing.T) {
 		{
 			TaskName:   "task-2",
 			TaskPassed: true,
-			TokenEstimate: &agent.TokenEstimate{
+			TokenEstimate: &tokens.Estimate{
 				TotalTokens:     15000,
 				McpSchemaTokens: 3000,
 			},
@@ -288,7 +288,7 @@ func TestCalculateDiffWithTokens(t *testing.T) {
 		{
 			TaskName:   "task-1",
 			TaskPassed: true,
-			TokenEstimate: &agent.TokenEstimate{
+			TokenEstimate: &tokens.Estimate{
 				TotalTokens:     8000,
 				McpSchemaTokens: 1500,
 			},
@@ -296,7 +296,7 @@ func TestCalculateDiffWithTokens(t *testing.T) {
 		{
 			TaskName:   "task-2",
 			TaskPassed: true,
-			TokenEstimate: &agent.TokenEstimate{
+			TokenEstimate: &tokens.Estimate{
 				TotalTokens:     12000,
 				McpSchemaTokens: 2500,
 			},

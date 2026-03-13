@@ -9,11 +9,11 @@ import (
 	"strings"
 
 	"github.com/fatih/color"
-	"github.com/mcpchecker/mcpchecker/pkg/agent"
 	"github.com/mcpchecker/mcpchecker/pkg/eval"
 	"github.com/mcpchecker/mcpchecker/pkg/mcpproxy"
 	"github.com/mcpchecker/mcpchecker/pkg/results"
 	"github.com/mcpchecker/mcpchecker/pkg/task"
+	"github.com/mcpchecker/mcpchecker/pkg/tokens"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/spf13/cobra"
 )
@@ -145,7 +145,7 @@ func printEvalResult(result *eval.EvalResult, opts viewOptions) {
 }
 
 // printTokenEstimate prints agent token usage estimates.
-func printTokenEstimate(estimate *agent.TokenEstimate) {
+func printTokenEstimate(estimate *tokens.Estimate) {
 	if estimate == nil || estimate.TotalTokens == 0 {
 		return
 	}
@@ -198,8 +198,8 @@ func printTokenEstimate(estimate *agent.TokenEstimate) {
 	fmt.Println()
 }
 
-func printActualAgentTokenUsage(estimate *agent.TokenEstimate) {
-	if estimate == nil || estimate.Source != agent.TokenSourceActual || estimate.Actual == nil {
+func printActualAgentTokenUsage(estimate *tokens.Estimate) {
+	if estimate == nil || estimate.Source != tokens.SourceActual || estimate.Actual == nil {
 		return
 	}
 
@@ -210,7 +210,7 @@ func printActualAgentTokenUsage(estimate *agent.TokenEstimate) {
 	}
 }
 
-func printJudgeTokenUsage(judgeTokenUsage *agent.ActualUsage) {
+func printJudgeTokenUsage(judgeTokenUsage *tokens.Usage) {
 	if judgeTokenUsage != nil && (judgeTokenUsage.InputTokens > 0 || judgeTokenUsage.OutputTokens > 0) {
 		fmt.Printf("  Judge Tokens: %d (in=%d, out=%d)", judgeTokenUsage.TotalTokens, judgeTokenUsage.InputTokens, judgeTokenUsage.OutputTokens)
 		fmt.Println()
