@@ -77,7 +77,7 @@ var _ EvalRunner = &evalRunner{}
 type taskConfig struct {
 	path       string
 	spec       *task.TaskConfig
-	assertions *TaskAssertions
+	assertions []*TaskAssertions // multiple assertion sets from matching TaskSets, evaluated independently
 }
 
 // NewRunner creates a new EvalRunner from an EvalSpec
@@ -256,6 +256,7 @@ func (r *evalRunner) RunWithProgress(ctx context.Context, taskPattern string, ca
 
 func (r *evalRunner) collectTaskConfigs(rx *regexp.Regexp) ([]taskConfig, error) {
 	taskConfigs := make([]taskConfig, 0)
+	seen := make(map[string]int) // maps canonical path to index in taskConfigs for merging assertions
 
 	for _, ts := range r.spec.Config.TaskSets {
 		var paths []string
@@ -289,10 +290,35 @@ func (r *evalRunner) collectTaskConfigs(rx *regexp.Regexp) ([]taskConfig, error)
 				continue
 			}
 
+			// Canonicalize path for deduplication (resolves ./foo vs foo, symlinks, etc.)
+			canonicalPath, err := filepath.Abs(path)
+			if err != nil {
+				canonicalPath = path // fallback to raw path if Abs fails
+			}
+			if resolved, err := filepath.EvalSymlinks(canonicalPath); err == nil {
+				canonicalPath = resolved
+			}
+
+			// Keep display path clean but relative (avoids leaking machine-specific paths in results)
+			displayPath := filepath.Clean(path)
+
+			// If task already exists, append assertions to evaluate independently
+			if idx, exists := seen[canonicalPath]; exists {
+				if ts.Assertions != nil {
+					taskConfigs[idx].assertions = append(taskConfigs[idx].assertions, ts.Assertions)
+				}
+				continue
+			}
+
+			seen[canonicalPath] = len(taskConfigs)
+			var assertions []*TaskAssertions
+			if ts.Assertions != nil {
+				assertions = []*TaskAssertions{ts.Assertions}
+			}
 			taskConfigs = append(taskConfigs, taskConfig{
-				path:       path,
+				path:       displayPath,
 				spec:       taskSpec,
-				assertions: ts.Assertions,
+				assertions: assertions,
 			})
 		}
 	}
@@ -716,14 +742,35 @@ func (r *evalRunner) evaluateTaskAssertions(
 	manager mcpproxy.ServerManager,
 	result *EvalResult,
 ) {
-	if tc.assertions != nil {
-		evaluator := NewCompositeAssertionEvaluator(tc.assertions)
-		assertionResults := evaluator.Evaluate(manager.GetAllCallHistory())
-
-		result.AssertionResults = assertionResults
-		result.AllAssertionsPassed = assertionResults.Succeeded()
-	} else {
+	if len(tc.assertions) == 0 {
 		// No assertions = all pass
 		result.AllAssertionsPassed = true
+		return
 	}
+
+	// Evaluate each assertion set independently and combine results
+	callHistory := manager.GetAllCallHistory()
+	var combinedResults *CompositeAssertionResult
+	allPassed := true
+
+	for _, assertions := range tc.assertions {
+		if assertions == nil {
+			continue
+		}
+		evaluator := NewCompositeAssertionEvaluator(assertions)
+		assertionResults := evaluator.Evaluate(callHistory)
+
+		if combinedResults == nil {
+			combinedResults = assertionResults
+		} else {
+			combinedResults = combinedResults.Merge(assertionResults)
+		}
+
+		if !assertionResults.Succeeded() {
+			allPassed = false
+		}
+	}
+
+	result.AssertionResults = combinedResults
+	result.AllAssertionsPassed = allPassed
 }
