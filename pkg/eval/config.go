@@ -7,6 +7,7 @@ import (
 
 	"sigs.k8s.io/yaml"
 
+	"github.com/mcpchecker/mcpchecker/pkg/agent"
 	"github.com/mcpchecker/mcpchecker/pkg/extension"
 	"github.com/mcpchecker/mcpchecker/pkg/llmjudge"
 	"github.com/mcpchecker/mcpchecker/pkg/util"
@@ -36,7 +37,7 @@ type EvalMetadata struct {
 
 type EvalConfig struct {
 	// Agent configuration
-	Agent *AgentRef `json:"agent"`
+	Agent *agent.AgentRef `json:"agent"`
 
 	// Extensions configuration
 	Extensions map[string]*extension.ExtensionSpec `json:"extensions"`
@@ -47,22 +48,6 @@ type EvalConfig struct {
 
 	// Advanced mode: different assertion sets
 	TaskSets []TaskSet `json:"taskSets,omitempty"`
-}
-
-// AgentRef specifies how to configure the agent
-// Use "type: builtin.X" for built-in agents or "type: file" for custom agent files
-type AgentRef struct {
-	// Type specifies the agent type:
-	// - "builtin.claude-code" for Claude Code
-	// - "builtin.llm-agent" for LLM agents (supports openai, anthropic, gemini, etc.)
-	// - "file" for custom agent configuration files
-	Type string `json:"type"`
-
-	// Path to agent configuration file (required when type is "file")
-	Path string `json:"path,omitempty"`
-
-	// Model in "provider:model-id" format (required for builtin.llm-agent)
-	Model string `json:"model,omitempty"`
 }
 
 type TaskSet struct {

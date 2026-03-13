@@ -21,6 +21,22 @@ type AgentSpec struct {
 	Commands      AgentCommands        `json:"commands"`
 }
 
+// AgentRef specifies how to configure the agent
+// Use "type: builtin.X" for built-in agents or "type: file" for custom agent files
+type AgentRef struct {
+	// Type specifies the agent type:
+	// - "builtin.claude-code" for Claude Code
+	// - "builtin.llm-agent" for LLM agents (supports openai, anthropic, gemini, etc.)
+	// - "file" for custom agent configuration files
+	Type string `json:"type"`
+
+	// Path to agent configuration file (required when type is "file")
+	Path string `json:"path,omitempty"`
+
+	// Model in "provider:model-id" format (required for builtin.llm-agent)
+	Model string `json:"model,omitempty"`
+}
+
 // BuiltinRef references a built-in agent type with optional model
 type BuiltinRef struct {
 	// Type is the built-in agent type (e.g., "llm-agent", "claude-code")
