@@ -34,3 +34,7 @@ _build-mock-agent:
 .PHONY: functional
 functional: build _build-mock-agent ## Run functional tests
 	MCPCHECKER_BINARY=$(CURDIR)/mcpchecker MOCK_AGENT_BINARY=$(CURDIR)/$(MOCK_AGENT_BINARY_NAME) go test -v -count=1 -race -tags functional ./functional/...
+
+.PHONY: docs
+docs: ## Generate CLI reference documentation
+	go run ./internal/gendocs/

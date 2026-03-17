@@ -18,6 +18,7 @@ func NewVerifyCmd() *cobra.Command {
 		Use:   "verify <results-file>",
 		Short: "Verify evaluation results meet thresholds",
 		Long: `Verify that evaluation results meet minimum pass rate thresholds.
+Useful as a CI gate to enforce quality standards.
 
 Exits with code 0 if all thresholds are met, code 1 otherwise.
 Use 'mcpchecker summary' to view detailed results.`,
