@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	mcpServerFileName = "mcp-server.json"
+	McpServerFileName = "mcp-server.json"
 )
 
 type ServerManager interface {
@@ -58,7 +58,7 @@ func NewServerManager(ctx context.Context, manager mcpclient.Manager) (ServerMan
 
 func (m *serverManager) GetMcpServerFiles() ([]string, error) {
 	if m.tmpDir != "" {
-		return []string{fmt.Sprintf("%s/%s", m.tmpDir, mcpServerFileName)}, nil
+		return []string{fmt.Sprintf("%s/%s", m.tmpDir, McpServerFileName)}, nil
 	}
 
 	cfg, err := m.getMcpServers()
@@ -71,7 +71,7 @@ func (m *serverManager) GetMcpServerFiles() ([]string, error) {
 		return nil, err
 	}
 
-	err = cfg.ToFile(fmt.Sprintf("%s/%s", tmpDir, mcpServerFileName))
+	err = cfg.ToFile(fmt.Sprintf("%s/%s", tmpDir, McpServerFileName))
 	if err != nil {
 		rmErr := os.Remove(tmpDir)
 		if rmErr != nil {
@@ -83,7 +83,7 @@ func (m *serverManager) GetMcpServerFiles() ([]string, error) {
 
 	m.tmpDir = tmpDir
 
-	return []string{fmt.Sprintf("%s/%s", tmpDir, mcpServerFileName)}, nil
+	return []string{fmt.Sprintf("%s/%s", tmpDir, McpServerFileName)}, nil
 
 }
 
