@@ -57,7 +57,7 @@ type judgeServer struct {
 func newJudgeServer() *judgeServer {
 	return &judgeServer{
 		ready: make(chan struct{}),
-		done:  make(chan error),
+		done:  make(chan error, 1),
 	}
 }
 
@@ -88,9 +88,9 @@ func (s *judgeServer) Run(ctx context.Context) error {
 
 	listener, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
-		close(s.ready)
-		s.done <- fmt.Errorf("failed to listen: %w", err)
-		return err
+		listenErr := fmt.Errorf("failed to listen: %w", err)
+		s.done <- listenErr
+		return listenErr
 	}
 
 	s.url = fmt.Sprintf("http://%s/mcp", listener.Addr().String())
@@ -126,6 +126,8 @@ func (s *judgeServer) WaitReady(ctx context.Context) error {
 	select {
 	case <-s.ready:
 		return nil
+	case err := <-s.done:
+		return err
 	case <-ctx.Done():
 		return ctx.Err()
 	}
@@ -181,7 +183,10 @@ func (s *judgeServer) submitJudgement(ctx context.Context, req *mcp.CallToolRequ
 		return nil, fmt.Errorf("no registered request for ID %q", requestID)
 	}
 
-	ch.(chan *LLMJudgeResult) <- result
+	select {
+	case ch.(chan *LLMJudgeResult) <- result:
+	default:
+	}
 
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{

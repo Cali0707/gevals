@@ -77,13 +77,14 @@ func (m *judgeServerManager) Close() error {
 	return nil
 }
 
-// noop for llm judge
 func (m *judgeServerManager) GetAllCallHistory() *mcpproxy.CallHistory {
-	return nil
+	return &mcpproxy.CallHistory{}
 }
 
-// noop for llm judge
 func (m *judgeServerManager) GetCallHistoryForServer(serverName string) (mcpproxy.CallHistory, bool) {
+	if serverName == "judge" {
+		return mcpproxy.CallHistory{}, true
+	}
 	return mcpproxy.CallHistory{}, false
 }
 

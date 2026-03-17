@@ -10,6 +10,10 @@ const (
 )
 
 func ResolveAgentRef(ref *AgentRef) (*AgentSpec, error) {
+	if ref == nil {
+		return nil, fmt.Errorf("agent ref must not be nil")
+	}
+
 	if ref.Type == "file" {
 		if ref.Path == "" {
 			return nil, fmt.Errorf("path must be specified when agent type is 'file'")
