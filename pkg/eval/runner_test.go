@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"testing"
 
+	"github.com/mcpchecker/mcpchecker/pkg/agent"
 	"github.com/mcpchecker/mcpchecker/pkg/mcpclient"
 	"github.com/mcpchecker/mcpchecker/pkg/task"
 	"github.com/stretchr/testify/assert"
@@ -23,7 +24,7 @@ func TestLoadAgentSpec(t *testing.T) {
 		"inline agent - builtin.claude-code": {
 			spec: &EvalSpec{
 				Config: EvalConfig{
-					Agent: &AgentRef{
+					Agent: &agent.AgentRef{
 						Type: "builtin.claude-code",
 					},
 				},
@@ -45,7 +46,7 @@ func TestLoadAgentSpec(t *testing.T) {
 		"inline agent - builtin.llm-agent": {
 			spec: &EvalSpec{
 				Config: EvalConfig{
-					Agent: &AgentRef{
+					Agent: &agent.AgentRef{
 						Type:  "builtin.llm-agent",
 						Model: "openai:gpt-4",
 					},
@@ -64,7 +65,7 @@ func TestLoadAgentSpec(t *testing.T) {
 		"inline agent - builtin.llm-agent without model": {
 			spec: &EvalSpec{
 				Config: EvalConfig{
-					Agent: &AgentRef{
+					Agent: &agent.AgentRef{
 						Type: "builtin.llm-agent",
 					},
 				},
@@ -75,7 +76,7 @@ func TestLoadAgentSpec(t *testing.T) {
 		"inline agent - unknown type": {
 			spec: &EvalSpec{
 				Config: EvalConfig{
-					Agent: &AgentRef{
+					Agent: &agent.AgentRef{
 						Type: "builtin.unknown-agent",
 					},
 				},
@@ -93,7 +94,7 @@ func TestLoadAgentSpec(t *testing.T) {
 		"file agent without path": {
 			spec: &EvalSpec{
 				Config: EvalConfig{
-					Agent: &AgentRef{
+					Agent: &agent.AgentRef{
 						Type: "file",
 					},
 				},
@@ -104,7 +105,7 @@ func TestLoadAgentSpec(t *testing.T) {
 		"invalid agent type format": {
 			spec: &EvalSpec{
 				Config: EvalConfig{
-					Agent: &AgentRef{
+					Agent: &agent.AgentRef{
 						Type: "invalid-format",
 					},
 				},
