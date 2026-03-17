@@ -2,7 +2,8 @@ package llmjudge
 
 import (
 	"fmt"
-	"os"
+
+	"github.com/mcpchecker/mcpchecker/pkg/agent"
 )
 
 const (
@@ -11,7 +12,8 @@ const (
 )
 
 type LLMJudgeEvalConfig struct {
-	Env *LLMJudgeEnvConfig `json:"env,omitempty"`
+	Env      *LLMJudgeEnvConfig `json:"env,omitempty"`
+	AgentRef *agent.AgentRef    `json:"ref,omitempty"`
 }
 
 type LLMJudgeEnvConfig struct {
@@ -23,18 +25,6 @@ type LLMJudgeEnvConfig struct {
 type LLMJudgeStepConfig struct {
 	Contains string `json:"contains,omitempty"`
 	Exact    string `json:"exact,omitempty"`
-}
-
-func (cfg *LLMJudgeEvalConfig) BaseUrl() string {
-	return os.Getenv(cfg.Env.BaseUrlKey)
-}
-
-func (cfg *LLMJudgeEvalConfig) ApiKey() string {
-	return os.Getenv(cfg.Env.ApiKeyKey)
-}
-
-func (cfg *LLMJudgeEvalConfig) ModelName() string {
-	return os.Getenv(cfg.Env.ModelNameKey)
 }
 
 func (cfg *LLMJudgeStepConfig) EvaluationMode() string {
