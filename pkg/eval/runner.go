@@ -548,7 +548,7 @@ func (r *evalRunner) runTask(
 
 	result.TokenEstimate.McpSchemaTokens = schemaTokens
 	result.TokenEstimate.MergeCallHistory(result.CallHistory)
-	result.TokenEstimate.RecalculateAggregates()
+	result.TokenEstimate.RecalculateAggregates(result.CallHistory)
 
 	r.progressCallback(ProgressEvent{
 		Type:    EventTaskComplete,

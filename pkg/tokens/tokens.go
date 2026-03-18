@@ -71,6 +71,18 @@ type Estimate struct {
 	Source Source `json:"source,omitempty"`
 	// Actual contains real usage from agent when available (nil if only estimated)
 	Actual *Usage `json:"actual,omitempty"`
+
+	// Turns holds per-LLM-turn output data extracted from session updates.
+	// Used by RecalculateAggregates to compute cumulative token estimates.
+	Turns []TurnTokens `json:"-"`
+}
+
+// TurnTokens represents one LLM API call turn for cumulative estimation.
+type TurnTokens struct {
+	// OutputTokens is the non-tool output tokens for this turn (thinking + message).
+	OutputTokens int64
+	// NumToolCalls is the number of tool calls made in this turn.
+	NumToolCalls int
 }
 
 // ToolCallData is a minimal struct to avoid circular dep
@@ -200,23 +212,68 @@ func (e *Estimate) MergeCallHistory(history *mcpproxy.CallHistory) {
 }
 
 // RecalculateAggregates recomputes InputTokens, OutputTokens, TotalTokens
-// from breakdown fields. No-op when Source is TokenSourceActual.
-func (e *Estimate) RecalculateAggregates() {
+// using cumulative token estimation. In an agentic loop each LLM API call
+// re-sends the full conversation history, so earlier content is amplified
+// by the number of subsequent turns.
+//
+// When per-turn data (Turns) is available and the call history has tool calls,
+// the calculation walks through each turn, tracking context growth. Otherwise
+// falls back to a single-turn calculation.
+//
+// No-op when Source is SourceActual.
+func (e *Estimate) RecalculateAggregates(history *mcpproxy.CallHistory) {
 	if e.Source == SourceActual {
 		return
 	}
 
-	e.InputTokens = e.PromptTokens +
-		e.ToolOutputTokens +
-		e.McpSchemaTokens +
-		e.ResourceOutputTokens +
-		e.PromptGetOutputTokens
-	e.OutputTokens = e.MessageTokens +
-		e.ThinkingTokens +
-		e.ToolInputTokens +
-		e.ResourceInputTokens +
-		e.PromptGetInputTokens
-	e.TotalTokens = e.InputTokens + e.OutputTokens
+	// Fallback: when per-turn data is unavailable, use simple sum of breakdown fields.
+	if len(e.Turns) == 0 {
+		e.InputTokens = e.PromptTokens +
+			e.ToolOutputTokens +
+			e.McpSchemaTokens +
+			e.ResourceOutputTokens +
+			e.PromptGetOutputTokens
+		e.OutputTokens = e.MessageTokens +
+			e.ThinkingTokens +
+			e.ToolInputTokens +
+			e.ResourceInputTokens +
+			e.PromptGetInputTokens
+		e.TotalTokens = e.InputTokens + e.OutputTokens
+		return
+	}
+
+	// Cumulative calculation: walk through each turn, tracking context growth.
+	// Each LLM call receives the full context accumulated so far.
+	var toolCalls []*mcpproxy.ToolCall
+	if history != nil {
+		toolCalls = history.ToolCalls
+	}
+
+	context := e.McpSchemaTokens + e.PromptTokens
+	var cumInput, cumOutput int64
+	callIdx := 0
+
+	for _, turn := range e.Turns {
+		cumInput += context
+
+		turnOutput := turn.OutputTokens
+		var turnResults int64
+
+		for i := 0; i < turn.NumToolCalls && callIdx < len(toolCalls); i++ {
+			if toolCalls[callIdx].Tokens != nil {
+				turnOutput += toolCalls[callIdx].Tokens.InputTokens  // tool call params (LLM output)
+				turnResults += toolCalls[callIdx].Tokens.OutputTokens // tool results (context input)
+			}
+			callIdx++
+		}
+
+		cumOutput += turnOutput
+		context += turnOutput + turnResults
+	}
+
+	e.InputTokens = cumInput
+	e.OutputTokens = cumOutput
+	e.TotalTokens = cumInput + cumOutput
 }
 
 // ToUsage returns the token counts as a Usage value.

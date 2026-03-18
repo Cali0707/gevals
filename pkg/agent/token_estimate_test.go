@@ -11,30 +11,11 @@ import (
 func TestRecalculateAggregates(t *testing.T) {
 	tt := map[string]struct {
 		estimate      tokens.Estimate
+		history       *mcpproxy.CallHistory
 		expectedInput int64
 		expectedOut   int64
 		expectedTotal int64
 	}{
-		"sums all component fields": {
-			estimate: tokens.Estimate{
-				PromptTokens:          100,
-				MessageTokens:         50,
-				ThinkingTokens:        30,
-				ToolInputTokens:       20,
-				ToolOutputTokens:      80,
-				McpSchemaTokens:       40,
-				ResourceInputTokens:   10,
-				ResourceOutputTokens:  15,
-				PromptGetInputTokens:  5,
-				PromptGetOutputTokens: 25,
-				Source:                tokens.SourceEstimated,
-			},
-			// Input = Prompt(100) + ToolOutput(80) + McpSchema(40) + ResourceOutput(15) + PromptGetOutput(25)
-			expectedInput: 260,
-			// Output = Message(50) + Thinking(30) + ToolInput(20) + ResourceInput(10) + PromptGetInput(5)
-			expectedOut:   115,
-			expectedTotal: 375,
-		},
 		"no-op when source is actual": {
 			estimate: tokens.Estimate{
 				InputTokens:  999,
@@ -47,20 +28,98 @@ func TestRecalculateAggregates(t *testing.T) {
 			expectedOut:   888,
 			expectedTotal: 1887,
 		},
-		"recalculates when source is empty": {
+		"empty turns falls back to simple sum": {
 			estimate: tokens.Estimate{
-				PromptTokens:  50,
-				MessageTokens: 30,
+				PromptTokens:          50,
+				MessageTokens:         20,
+				ThinkingTokens:        10,
+				ToolInputTokens:       5,
+				ToolOutputTokens:      30,
+				McpSchemaTokens:       15,
+				ResourceInputTokens:   3,
+				ResourceOutputTokens:  7,
+				PromptGetInputTokens:  2,
+				PromptGetOutputTokens: 8,
 			},
-			expectedInput: 50,
+			// Input = prompt(50) + toolOutput(30) + mcpSchema(15) + resourceOutput(7) + promptGetOutput(8) = 110
+			expectedInput: 110,
+			// Output = message(20) + thinking(10) + toolInput(5) + resourceInput(3) + promptGetInput(2) = 40
+			expectedOut:   40,
+			expectedTotal: 150,
+		},
+		"nil turns falls back to simple sum": {
+			estimate: tokens.Estimate{
+				PromptTokens:    100,
+				MessageTokens:   50,
+				McpSchemaTokens: 20,
+			},
+			// Input = 100 + 20 = 120
+			expectedInput: 120,
+			// Output = 50
+			expectedOut:   50,
+			expectedTotal: 170,
+		},
+		"single turn no tool calls": {
+			estimate: tokens.Estimate{
+				PromptTokens:    50,
+				McpSchemaTokens: 10,
+				Turns: []tokens.TurnTokens{
+					{OutputTokens: 30, NumToolCalls: 0},
+				},
+			},
+			// Input = context(50+10) sent once
+			expectedInput: 60,
+			// Output = turn output(30)
 			expectedOut:   30,
-			expectedTotal: 80,
+			expectedTotal: 90,
+		},
+		"cumulative with two turns and one tool call": {
+			estimate: tokens.Estimate{
+				PromptTokens:    100,
+				McpSchemaTokens: 40,
+				Turns: []tokens.TurnTokens{
+					{OutputTokens: 20, NumToolCalls: 1}, // thinking+msg for turn 0
+					{OutputTokens: 50, NumToolCalls: 0}, // final response
+				},
+			},
+			history: &mcpproxy.CallHistory{
+				ToolCalls: []*mcpproxy.ToolCall{
+					{Tokens: mcpproxy.NewTokenCount(10, 80)}, // input=call params, output=result
+				},
+			},
+			// Turn 0: context=140, cumInput+=140, turnOutput=20+10=30, turnResults=80, context→140+30+80=250
+			// Turn 1: context=250, cumInput+=250, turnOutput=50
+			expectedInput: 390,
+			// Turn 0: cumOutput+=30, Turn 1: cumOutput+=50
+			expectedOut:   80,
+			expectedTotal: 470,
+		},
+		"parallel tool calls grouped in one turn": {
+			estimate: tokens.Estimate{
+				PromptTokens:    100,
+				McpSchemaTokens: 0,
+				Turns: []tokens.TurnTokens{
+					{OutputTokens: 10, NumToolCalls: 2}, // two parallel tool calls
+					{OutputTokens: 20, NumToolCalls: 0}, // final response
+				},
+			},
+			history: &mcpproxy.CallHistory{
+				ToolCalls: []*mcpproxy.ToolCall{
+					{Tokens: mcpproxy.NewTokenCount(5, 50)},
+					{Tokens: mcpproxy.NewTokenCount(5, 50)},
+				},
+			},
+			// Turn 0: context=100, cumInput+=100, turnOutput=10+5+5=20, turnResults=50+50=100, context→100+20+100=220
+			// Turn 1: context=220, cumInput+=220, turnOutput=20
+			expectedInput: 320,
+			expectedOut:   40,
+			expectedTotal: 360,
 		},
 	}
 
 	for name, tc := range tt {
 		t.Run(name, func(t *testing.T) {
-			tc.estimate.RecalculateAggregates()
+			tc.estimate.RecalculateAggregates(tc.history)
 
 			assert.Equal(t, tc.expectedInput, tc.estimate.InputTokens)
 			assert.Equal(t, tc.expectedOut, tc.estimate.OutputTokens)
@@ -248,7 +307,7 @@ func TestComputeTokenEstimate(t *testing.T) {
 }
 
 func TestRecalculateAggregates_AfterMerge(t *testing.T) {
-	// End-to-end: compute estimate, merge call history, recalculate, verify identity holds.
+	// End-to-end: compute estimate, merge call history, recalculate with cumulative.
 	estimate := tokens.ComputeEstimate("test prompt", "test message", "", nil)
 
 	history := &mcpproxy.CallHistory{
@@ -260,20 +319,21 @@ func TestRecalculateAggregates_AfterMerge(t *testing.T) {
 		},
 	}
 
+	// Simulate two turns: one with a tool call, one final response.
+	// Split message tokens roughly between the two turns.
+	estimate.Turns = []tokens.TurnTokens{
+		{OutputTokens: estimate.MessageTokens / 2, NumToolCalls: 1},
+		{OutputTokens: estimate.MessageTokens - estimate.MessageTokens/2, NumToolCalls: 0},
+	}
+
 	estimate.McpSchemaTokens = 30
 	estimate.MergeCallHistory(history)
-	estimate.RecalculateAggregates()
+	estimate.RecalculateAggregates(history)
 
-	assert.Equal(t,
-		estimate.PromptTokens+estimate.ToolOutputTokens+estimate.McpSchemaTokens+
-			estimate.ResourceOutputTokens+estimate.PromptGetOutputTokens,
-		estimate.InputTokens,
-	)
-	assert.Equal(t,
-		estimate.MessageTokens+estimate.ThinkingTokens+estimate.ToolInputTokens+
-			estimate.ResourceInputTokens+estimate.PromptGetInputTokens,
-		estimate.OutputTokens,
-	)
+	// With cumulative calculation, aggregates should be greater than a simple
+	// sum of breakdowns due to context replay amplification.
 	assert.Equal(t, estimate.InputTokens+estimate.OutputTokens, estimate.TotalTokens)
 	assert.Greater(t, estimate.TotalTokens, int64(0))
+	// The prompt+schema should appear in both turns' input (amplified).
+	assert.Greater(t, estimate.InputTokens, estimate.PromptTokens+estimate.McpSchemaTokens)
 }

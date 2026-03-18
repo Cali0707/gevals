@@ -11,6 +11,7 @@ import (
 
 	"github.com/coder/acp-go-sdk"
 	"github.com/mcpchecker/mcpchecker/pkg/mcpproxy"
+	"github.com/mcpchecker/mcpchecker/pkg/tokenizer"
 	"github.com/mcpchecker/mcpchecker/pkg/tokens"
 )
 
@@ -115,6 +116,75 @@ func ExtractThinking(updates []acp.SessionUpdate) string {
 		}
 	}
 	return thinking.String()
+}
+
+// turnBuilder accumulates session update data and produces per-turn token counts.
+type turnBuilder struct {
+	tok            tokenizer.Tokenizer
+	thinking       strings.Builder
+	message        strings.Builder
+	numToolCalls   int
+	started        bool
+	seenResults    bool
+	turns          []tokens.TurnTokens
+}
+
+func newTurnBuilder() *turnBuilder {
+	return &turnBuilder{tok: tokenizer.Get()}
+}
+
+func (tb *turnBuilder) flush() {
+	thinkingCount, _ := tb.tok.CountTokens(tb.thinking.String())
+	messageCount, _ := tb.tok.CountTokens(tb.message.String())
+	tb.turns = append(tb.turns, tokens.TurnTokens{
+		OutputTokens: int64(thinkingCount) + int64(messageCount),
+		NumToolCalls: tb.numToolCalls,
+	})
+	tb.thinking.Reset()
+	tb.message.Reset()
+	tb.numToolCalls = 0
+	tb.seenResults = false
+	tb.started = false
+}
+
+// ExtractTurns identifies LLM turns from the session update stream.
+// Each turn consists of thinking + message output followed by zero or more
+// tool calls. Parallel tool calls (multiple ToolCall events before any
+// results arrive) are grouped into a single turn.
+func ExtractTurns(updates []acp.SessionUpdate) []tokens.TurnTokens {
+	tb := newTurnBuilder()
+
+	for _, u := range updates {
+		isThinking := u.AgentThoughtChunk != nil && u.AgentThoughtChunk.Content.Text != nil
+		isMessage := u.AgentMessageChunk != nil && u.AgentMessageChunk.Content.Text != nil
+
+		// Thinking or message after tool results means a new turn has started.
+		if (isThinking || isMessage) && tb.seenResults {
+			tb.flush()
+		}
+
+		if isThinking {
+			tb.started = true
+			tb.thinking.WriteString(u.AgentThoughtChunk.Content.Text.Text)
+		}
+		if isMessage {
+			tb.started = true
+			tb.message.WriteString(u.AgentMessageChunk.Content.Text.Text)
+		}
+		if u.ToolCall != nil {
+			tb.started = true
+			tb.numToolCalls++
+		}
+		if u.ToolCallUpdate != nil && u.ToolCallUpdate.RawOutput != nil {
+			tb.seenResults = true
+		}
+	}
+
+	if tb.started {
+		tb.flush()
+	}
+
+	return tb.turns
 }
 
 // AgentResult provides access to the results of an agent execution.

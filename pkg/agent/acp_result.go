@@ -58,6 +58,7 @@ func (res *acpResult) GetTokenEstimate() tokens.Estimate {
 		toolCallSummaryToToolCallData(res.GetToolCalls()),
 	)
 	estimate.Source = tokens.SourceEstimated
+	estimate.Turns = ExtractTurns(res.updates)
 
 	if res.actualUsage != nil {
 		estimate.Source = tokens.SourceActual
@@ -65,8 +66,6 @@ func (res *acpResult) GetTokenEstimate() tokens.Estimate {
 		estimate.InputTokens = res.actualUsage.InputTokens
 		estimate.OutputTokens = res.actualUsage.OutputTokens
 		estimate.TotalTokens = res.actualUsage.TotalTokens
-	} else {
-		estimate.RecalculateAggregates()
 	}
 
 	return estimate
