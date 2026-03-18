@@ -131,10 +131,12 @@ func (j *llmJudge) EvaluateText(ctx context.Context, judgeConfig *LLMJudgeStepCo
 	if err != nil {
 		return nil, fmt.Errorf("failed to run judge agent: %w", err)
 	}
-	_ = result
+
+	estimate := result.GetTokenEstimate()
 
 	select {
 	case res := <-resultCh:
+		res.Usage = estimate.ToUsage()
 		return res, nil
 	default:
 		return nil, fmt.Errorf("judge agent completed without calling submit_judgement tool")
