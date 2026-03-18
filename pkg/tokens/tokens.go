@@ -226,6 +226,22 @@ func (e *Estimate) RecalculateAggregates(history *mcpproxy.CallHistory) {
 		return
 	}
 
+	// Fallback: when per-turn data is unavailable, use simple sum of breakdown fields.
+	if len(e.Turns) == 0 {
+		e.InputTokens = e.PromptTokens +
+			e.ToolOutputTokens +
+			e.McpSchemaTokens +
+			e.ResourceOutputTokens +
+			e.PromptGetOutputTokens
+		e.OutputTokens = e.MessageTokens +
+			e.ThinkingTokens +
+			e.ToolInputTokens +
+			e.ResourceInputTokens +
+			e.PromptGetInputTokens
+		e.TotalTokens = e.InputTokens + e.OutputTokens
+		return
+	}
+
 	// Cumulative calculation: walk through each turn, tracking context growth.
 	// Each LLM call receives the full context accumulated so far.
 	var toolCalls []*mcpproxy.ToolCall

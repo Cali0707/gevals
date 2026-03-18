@@ -28,6 +28,37 @@ func TestRecalculateAggregates(t *testing.T) {
 			expectedOut:   888,
 			expectedTotal: 1887,
 		},
+		"empty turns falls back to simple sum": {
+			estimate: tokens.Estimate{
+				PromptTokens:          50,
+				MessageTokens:         20,
+				ThinkingTokens:        10,
+				ToolInputTokens:       5,
+				ToolOutputTokens:      30,
+				McpSchemaTokens:       15,
+				ResourceInputTokens:   3,
+				ResourceOutputTokens:  7,
+				PromptGetInputTokens:  2,
+				PromptGetOutputTokens: 8,
+			},
+			// Input = prompt(50) + toolOutput(30) + mcpSchema(15) + resourceOutput(7) + promptGetOutput(8) = 110
+			expectedInput: 110,
+			// Output = message(20) + thinking(10) + toolInput(5) + resourceInput(3) + promptGetInput(2) = 40
+			expectedOut:   40,
+			expectedTotal: 150,
+		},
+		"nil turns falls back to simple sum": {
+			estimate: tokens.Estimate{
+				PromptTokens:    100,
+				MessageTokens:   50,
+				McpSchemaTokens: 20,
+			},
+			// Input = 100 + 20 = 120
+			expectedInput: 120,
+			// Output = 50
+			expectedOut:   50,
+			expectedTotal: 170,
+		},
 		"single turn no tool calls": {
 			estimate: tokens.Estimate{
 				PromptTokens:    50,
