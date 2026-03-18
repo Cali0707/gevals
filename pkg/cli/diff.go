@@ -43,7 +43,7 @@ func NewDiffCmd() *cobra.Command {
 		Short: "Compare two evaluation results",
 		Long: `Compare evaluation results between two runs (e.g., main vs PR).
 
-Shows regressions, improvements, and overall pass rate changes.
+Shows regressions, improvements, new tasks, removed tasks, and overall pass rate changes.
 Useful for posting on pull requests to show impact of changes.
 
 Example:

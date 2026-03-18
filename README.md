@@ -689,52 +689,7 @@ commands:
 
 ## CLI Commands
 
-### `mcpchecker check`
-Run evaluations against your MCP server:
-```bash
-mcpchecker check examples/kubernetes/eval.yaml
-```
-
-Options:
-- `-o, --output` - Output format: text or json (default: text)
-- `-v, --verbose` - Enable verbose output
-- `-r, --run` - Regular expression to filter task names
-- `-l, --label-selector` - Filter tasks by label (e.g., "suite=kubernetes")
-- `-p, --parallel` - Number of parallel workers for tasks marked as parallel (default: 1)
-- `-n, --runs` - Number of times to run each task for consistency testing (default: 1, uses task-level runs if not specified)
-
-### `mcpchecker summary`
-Display a summary of evaluation results:
-```bash
-mcpchecker summary results.json                    # Human-readable text
-mcpchecker summary results.json --output json      # JSON output
-mcpchecker summary results.json --github-output    # GitHub Actions format
-mcpchecker summary results.json --task task-name   # Filter by task
-```
-
-### `mcpchecker verify`
-Verify that results meet minimum pass rate thresholds (useful for CI):
-```bash
-mcpchecker verify results.json --task 0.8 --assertion 0.9
-```
-Exits with code 0 if thresholds are met, code 1 otherwise.
-
-### `mcpchecker diff`
-Compare two evaluation runs (e.g., main vs PR):
-```bash
-mcpchecker diff --base results-main.json --current results-pr.json
-mcpchecker diff --base results-main.json --current results-pr.json --output markdown
-```
-Shows:
-- Regressions and improvements (tasks that changed pass/fail status)
-- New and removed tasks
-- Token usage comparison (total tokens and MCP schema tokens)
-
-### `mcpchecker view`
-View detailed results for a specific task:
-```bash
-mcpchecker view results.json --task task-name
-```
+See the [CLI reference documentation](docs/cli/mcpchecker.md) for all available commands and flags.
 
 ## How It Works
 
