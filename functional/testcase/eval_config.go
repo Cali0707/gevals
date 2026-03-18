@@ -1,6 +1,7 @@
 package testcase
 
 import (
+	"github.com/mcpchecker/mcpchecker/pkg/agent"
 	"github.com/mcpchecker/mcpchecker/pkg/eval"
 	"github.com/mcpchecker/mcpchecker/pkg/llmjudge"
 )
@@ -34,7 +35,7 @@ func (ec *EvalConfig) MCPConfigFile(path string) *EvalConfig {
 
 // Agent configures the agent to use for evaluation
 func (ec *EvalConfig) Agent(configure func(*AgentRefBuilder)) *EvalConfig {
-	builder := &AgentRefBuilder{ref: &eval.AgentRef{}}
+	builder := &AgentRefBuilder{ref: &agent.AgentRef{}}
 	configure(builder)
 	ec.spec.Config.Agent = builder.ref
 	return ec
@@ -42,7 +43,7 @@ func (ec *EvalConfig) Agent(configure func(*AgentRefBuilder)) *EvalConfig {
 
 // FileAgent sets a custom file-based agent
 func (ec *EvalConfig) FileAgent(path string) *EvalConfig {
-	ec.spec.Config.Agent = &eval.AgentRef{
+	ec.spec.Config.Agent = &agent.AgentRef{
 		Type: "file",
 		Path: path,
 	}
@@ -51,7 +52,7 @@ func (ec *EvalConfig) FileAgent(path string) *EvalConfig {
 
 // ClaudeCodeAgent sets Claude Code as the agent
 func (ec *EvalConfig) ClaudeCodeAgent() *EvalConfig {
-	ec.spec.Config.Agent = &eval.AgentRef{
+	ec.spec.Config.Agent = &agent.AgentRef{
 		Type: "builtin.claude-code",
 	}
 	return ec
@@ -59,7 +60,7 @@ func (ec *EvalConfig) ClaudeCodeAgent() *EvalConfig {
 
 // LLMAgent sets an LLM agent with a model in "provider:model-id" format
 func (ec *EvalConfig) LLMAgent(model string) *EvalConfig {
-	ec.spec.Config.Agent = &eval.AgentRef{
+	ec.spec.Config.Agent = &agent.AgentRef{
 		Type:  "builtin.llm-agent",
 		Model: model,
 	}
@@ -105,7 +106,7 @@ func (ec *EvalConfig) Build() *eval.EvalSpec {
 
 // AgentRefBuilder builds agent reference configuration
 type AgentRefBuilder struct {
-	ref *eval.AgentRef
+	ref *agent.AgentRef
 }
 
 // Type sets the agent type
@@ -360,7 +361,7 @@ func (b *AssertionsBuilder) NoDuplicateCalls() *AssertionsBuilder {
 type (
 	EvalSpec           = eval.EvalSpec
 	EvalMetadata       = eval.EvalMetadata
-	AgentRef           = eval.AgentRef
+	AgentRef           = agent.AgentRef
 	TaskSet            = eval.TaskSet
 	TaskAssertions     = eval.TaskAssertions
 	ToolAssertion      = eval.ToolAssertion

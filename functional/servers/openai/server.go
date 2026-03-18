@@ -173,6 +173,40 @@ func (s *MockOpenAIServer) handleChatCompletions(w http.ResponseWriter, r *http.
 		return
 	}
 
+	// If request contains tool result messages, this is a follow-up after a tool call.
+	// Return a simple text response to end the agentic loop.
+	for _, msg := range req.Messages {
+		if msg.Role == "tool" {
+			followUp := &ChatCompletionResponse{
+				ID:      "chatcmpl-mock-followup",
+				Object:  "chat.completion",
+				Created: time.Now().Unix(),
+				Model:   req.Model,
+				Choices: []Choice{{
+					Index: 0,
+					Message: Message{
+						Role:    "assistant",
+						Content: "Evaluation complete.",
+					},
+					FinishReason: "stop",
+				}},
+				Usage: &Usage{
+					PromptTokens:     50,
+					CompletionTokens: 10,
+					TotalTokens:      60,
+				},
+			}
+			if req.Stream {
+				s.writeStreamingResponse(w, followUp)
+			} else {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusOK)
+				json.NewEncoder(w).Encode(followUp)
+			}
+			return
+		}
+	}
+
 	// Capture the request
 	captured := CapturedRequest{
 		Raw:       req,
@@ -233,6 +267,12 @@ func (s *MockOpenAIServer) handleChatCompletions(w http.ResponseWriter, r *http.
 
 	// Return success response
 	if response.Body != nil {
+		// Check if the client requested streaming
+		if req.Stream {
+			s.writeStreamingResponse(w, response.Body)
+			return
+		}
+
 		w.Header().Set("Content-Type", "application/json")
 		statusCode := response.StatusCode
 		if statusCode == 0 {
@@ -246,6 +286,142 @@ func (s *MockOpenAIServer) handleChatCompletions(w http.ResponseWriter, r *http.
 	// Neither error nor body configured - this is a configuration error
 	s.writeError(w, http.StatusInternalServerError, "server_error",
 		"Expectation matched but no response configured")
+}
+
+// writeStreamingResponse converts a ChatCompletionResponse into SSE chunks
+// matching the format that the OpenAI Go SDK expects.
+func (s *MockOpenAIServer) writeStreamingResponse(w http.ResponseWriter, body *ChatCompletionResponse) {
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		s.writeError(w, http.StatusInternalServerError, "server_error", "streaming not supported")
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.WriteHeader(http.StatusOK)
+
+	writeChunk := func(chunk any) {
+		data, _ := json.Marshal(chunk)
+		fmt.Fprintf(w, "data: %s\n\n", string(data))
+		flusher.Flush()
+	}
+
+	for _, choice := range body.Choices {
+		// If there are tool calls, send them as streaming chunks
+		if len(choice.Message.ToolCalls) > 0 {
+			for i, tc := range choice.Message.ToolCalls {
+				// First chunk: tool call start with id, type, name, empty args
+				writeChunk(ChatCompletionChunk{
+					ID:      body.ID,
+					Object:  "chat.completion.chunk",
+					Created: body.Created,
+					Model:   body.Model,
+					Choices: []ChunkChoice{{
+						Index: choice.Index,
+						Delta: ChunkDelta{
+							ToolCalls: []ChunkToolCall{{
+								Index: int64(i),
+								ID:    tc.ID,
+								Type:  tc.Type,
+								Function: ChunkFunctionCall{
+									Name:      tc.Function.Name,
+									Arguments: "",
+								},
+							}},
+						},
+						FinishReason: nil,
+					}},
+				})
+
+				// Second chunk: tool call arguments
+				writeChunk(ChatCompletionChunk{
+					ID:      body.ID,
+					Object:  "chat.completion.chunk",
+					Created: body.Created,
+					Model:   body.Model,
+					Choices: []ChunkChoice{{
+						Index: choice.Index,
+						Delta: ChunkDelta{
+							ToolCalls: []ChunkToolCall{{
+								Index: int64(i),
+								Function: ChunkFunctionCall{
+									Arguments: tc.Function.Arguments,
+								},
+							}},
+						},
+						FinishReason: nil,
+					}},
+				})
+			}
+
+			// Finish chunk with finish_reason
+			finishReason := choice.FinishReason
+			if finishReason == "" {
+				finishReason = "tool_calls"
+			}
+			writeChunk(ChatCompletionChunk{
+				ID:      body.ID,
+				Object:  "chat.completion.chunk",
+				Created: body.Created,
+				Model:   body.Model,
+				Choices: []ChunkChoice{{
+					Index:        choice.Index,
+					Delta:        ChunkDelta{},
+					FinishReason: &finishReason,
+				}},
+			})
+		} else if choice.Message.Content != "" {
+			// Text response: send as content delta
+			writeChunk(ChatCompletionChunk{
+				ID:      body.ID,
+				Object:  "chat.completion.chunk",
+				Created: body.Created,
+				Model:   body.Model,
+				Choices: []ChunkChoice{{
+					Index: choice.Index,
+					Delta: ChunkDelta{
+						Role:    "assistant",
+						Content: choice.Message.Content,
+					},
+					FinishReason: nil,
+				}},
+			})
+
+			finishReason := choice.FinishReason
+			if finishReason == "" {
+				finishReason = "stop"
+			}
+			writeChunk(ChatCompletionChunk{
+				ID:      body.ID,
+				Object:  "chat.completion.chunk",
+				Created: body.Created,
+				Model:   body.Model,
+				Choices: []ChunkChoice{{
+					Index:        choice.Index,
+					Delta:        ChunkDelta{},
+					FinishReason: &finishReason,
+				}},
+			})
+		}
+	}
+
+	// Usage chunk (empty choices)
+	if body.Usage != nil {
+		writeChunk(ChatCompletionChunk{
+			ID:      body.ID,
+			Object:  "chat.completion.chunk",
+			Created: body.Created,
+			Model:   body.Model,
+			Choices: []ChunkChoice{},
+			Usage:   body.Usage,
+		})
+	}
+
+	// Final [DONE] marker
+	fmt.Fprintf(w, "data: [DONE]\n\n")
+	flusher.Flush()
 }
 
 // writeError writes an OpenAI-style error response

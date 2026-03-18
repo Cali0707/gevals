@@ -6,11 +6,56 @@ import (
 
 // ChatCompletionRequest matches the OpenAI SDK format
 type ChatCompletionRequest struct {
-	Model      string      `json:"model"`
-	Messages   []Message   `json:"messages"`
-	Tools      []Tool      `json:"tools,omitempty"`
-	ToolChoice *ToolChoice `json:"tool_choice,omitempty"`
-	Seed       *int64      `json:"seed,omitempty"`
+	Model         string         `json:"model"`
+	Messages      []Message      `json:"messages"`
+	Tools         []Tool         `json:"tools,omitempty"`
+	ToolChoice    *ToolChoice    `json:"tool_choice,omitempty"`
+	Seed          *int64         `json:"seed,omitempty"`
+	Stream        bool           `json:"stream,omitempty"`
+	StreamOptions *StreamOptions `json:"stream_options,omitempty"`
+}
+
+// StreamOptions for streaming requests
+type StreamOptions struct {
+	IncludeUsage bool `json:"include_usage,omitempty"`
+}
+
+// ChatCompletionChunk is the streaming response format
+type ChatCompletionChunk struct {
+	ID      string        `json:"id"`
+	Object  string        `json:"object"`
+	Created int64         `json:"created"`
+	Model   string        `json:"model"`
+	Choices []ChunkChoice `json:"choices"`
+	Usage   *Usage        `json:"usage,omitempty"`
+}
+
+// ChunkChoice is a single choice in a streaming chunk
+type ChunkChoice struct {
+	Index        int          `json:"index"`
+	Delta        ChunkDelta   `json:"delta"`
+	FinishReason *string      `json:"finish_reason"`
+}
+
+// ChunkDelta is the delta content in a streaming chunk
+type ChunkDelta struct {
+	Role      string          `json:"role,omitempty"`
+	Content   string          `json:"content,omitempty"`
+	ToolCalls []ChunkToolCall `json:"tool_calls,omitempty"`
+}
+
+// ChunkToolCall is a tool call delta in a streaming chunk
+type ChunkToolCall struct {
+	Index    int64             `json:"index"`
+	ID       string            `json:"id,omitempty"`
+	Type     string            `json:"type,omitempty"`
+	Function ChunkFunctionCall `json:"function"`
+}
+
+// ChunkFunctionCall contains function name/arguments in a streaming chunk
+type ChunkFunctionCall struct {
+	Name      string `json:"name,omitempty"`
+	Arguments string `json:"arguments,omitempty"`
 }
 
 // Message represents a chat message

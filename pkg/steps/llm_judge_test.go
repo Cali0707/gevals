@@ -27,6 +27,10 @@ func (f *fakeLLMJudge) ModelName() string {
 	return f.model
 }
 
+func (f *fakeLLMJudge) Close() error {
+	return nil
+}
+
 func TestLLMJudgeStepConfig_Validate(t *testing.T) {
 	tt := map[string]struct {
 		config    *llmjudge.LLMJudgeStepConfig

@@ -219,6 +219,20 @@ func (e *Estimate) RecalculateAggregates() {
 	e.TotalTokens = e.InputTokens + e.OutputTokens
 }
 
+// ToUsage returns the token counts as a Usage value.
+// If actual usage is available, it is returned directly; otherwise a Usage
+// is constructed from the aggregate estimate fields.
+func (e *Estimate) ToUsage() *Usage {
+	if e.Actual != nil {
+		return e.Actual
+	}
+	return &Usage{
+		InputTokens:  e.InputTokens,
+		OutputTokens: e.OutputTokens,
+		TotalTokens:  e.TotalTokens,
+	}
+}
+
 // countTextWithErrors counts tokens in text, logging warnings and appending error labels on failure.
 func countTextWithErrors(tok tokenizer.Tokenizer, text string, label string, errors *[]string) int64 {
 	count, err := tok.CountTokens(text)

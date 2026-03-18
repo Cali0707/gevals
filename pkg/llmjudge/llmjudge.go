@@ -2,54 +2,19 @@ package llmjudge
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 
-	"github.com/openai/openai-go/v2"
-	"github.com/openai/openai-go/v2/option"
-
+	"github.com/google/uuid"
+	"github.com/mcpchecker/mcpchecker/pkg/agent"
 	"github.com/mcpchecker/mcpchecker/pkg/tokens"
-)
-
-const (
-	openaiSeed = 0 // allows for consistent eval results
-)
-
-var (
-	submitJudgementFunction = openai.FunctionDefinitionParam{
-		Name:        "submit_judgement",
-		Description: openai.String(""),
-		Parameters: openai.FunctionParameters{
-			"type": "object",
-			"properties": map[string]any{
-				"passed": map[string]any{
-					"type":        "boolean",
-					"description": "Binary result: true for pass, false for fail",
-				},
-				"reason": map[string]any{
-					"type":        "string",
-					"description": "A detailed explanation for the score, referencing the evaluation criterion and the text",
-				},
-				"failureCategory": map[string]any{
-					"type":        "string",
-					"description": "If passed is false, specify the reason. Use 'n/a' if passing",
-					"enum": []string{
-						"semantic_mismatch",
-						"missing_information",
-						"contains_extra_info",
-						"n/a",
-					},
-				},
-			},
-			"required": []string{"passed", "reason", "failureCategory"},
-		},
-	}
 )
 
 type LLMJudge interface {
 	EvaluateText(ctx context.Context, judgeConfig *LLMJudgeStepConfig, prompt, output string) (*LLMJudgeResult, error)
 	ModelName() string
+	Close() error
 }
 
 type LLMJudgeResult struct {
@@ -60,9 +25,10 @@ type LLMJudgeResult struct {
 }
 
 type llmJudge struct {
-	client  openai.Client
-	model   string
-	baseUrl string
+	runner agent.Runner
+	name   string
+	server *judgeServer
+	cancel context.CancelFunc
 }
 
 type noopLLMJudge struct{}
@@ -79,52 +45,60 @@ func (n *noopLLMJudge) ModelName() string {
 	return "noop"
 }
 
+func (n *noopLLMJudge) Close() error {
+	return nil
+}
+
 func NewLLMJudge(cfg *LLMJudgeEvalConfig) (LLMJudge, error) {
 	if cfg == nil {
 		return &noopLLMJudge{}, nil
 	}
-	if cfg.Env == nil {
-		return nil, fmt.Errorf("llm judge env config is required to create an llm judge")
-	}
-	baseUrl := cfg.BaseUrl()
-	apiKey := cfg.ApiKey()
-	model := cfg.ModelName()
 
-	var missingVars []string
-	if baseUrl == "" {
-		missingVars = append(missingVars, fmt.Sprintf("%s (base URL)", cfg.Env.BaseUrlKey))
-	}
-	if apiKey == "" {
-		missingVars = append(missingVars, fmt.Sprintf("%s (API key)", cfg.Env.ApiKeyKey))
-	}
-	if model == "" {
-		missingVars = append(missingVars, fmt.Sprintf("%s (model name)", cfg.Env.ModelNameKey))
+	ref := cfg.AgentRef
+
+	// Deprecated: translate env config to agent ref
+	if ref == nil && cfg.Env != nil {
+		var err error
+		ref, err = translateEnvToAgentRef(cfg.Env)
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	if len(missingVars) > 0 {
-		return nil, fmt.Errorf("missing required environment variables for LLM judge: %v", missingVars)
+	if ref == nil {
+		return nil, fmt.Errorf("llm judge requires either an agent ref or env config")
 	}
 
-	client := openai.NewClient(
-		option.WithBaseURL(baseUrl),
-		option.WithAPIKey(apiKey),
-	)
+	// Resolve agent ref to spec, then to runner
+	spec, err := agent.ResolveAgentRef(ref)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve judge agent ref: %w", err)
+	}
+
+	runner, err := agent.NewRunnerForSpec(spec)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create judge agent runner: %w", err)
+	}
+
+	// Start the judge MCP server
+	server := newJudgeServer()
+	serverCtx, cancel := context.WithCancel(context.Background())
+
+	go func() {
+		_ = server.Run(serverCtx)
+	}()
+
+	if err := server.WaitReady(serverCtx); err != nil {
+		cancel()
+		return nil, fmt.Errorf("failed to start judge server: %w", err)
+	}
 
 	return &llmJudge{
-		client:  client,
-		model:   model,
-		baseUrl: baseUrl,
+		runner: runner,
+		name:   runner.AgentName(),
+		server: server,
+		cancel: cancel,
 	}, nil
-}
-
-// supportsSeed returns true if the LLM provider supports the seed parameter for deterministic outputs
-func (j *llmJudge) supportsSeed() bool {
-	// Gemini's OpenAI-compatible endpoint doesn't support the seed parameter as of v1beta.
-	// Sending seed results in: "Invalid JSON payload received. Unknown name \"seed\": Cannot find field."
-	// Reference: https://discuss.ai.google.dev/t/openai-compatibility-not-fully-implemented/95991
-	// The OpenAI compatibility layer is still in beta with limited feature support.
-	// Check if the base URL contains "generativelanguage.googleapis.com" (Gemini)
-	return !strings.Contains(j.baseUrl, "generativelanguage.googleapis.com")
 }
 
 func (j *llmJudge) EvaluateText(ctx context.Context, judgeConfig *LLMJudgeStepConfig, prompt, output string) (*LLMJudgeResult, error) {
@@ -144,66 +118,83 @@ func (j *llmJudge) EvaluateText(ctx context.Context, judgeConfig *LLMJudgeStepCo
 		return nil, err
 	}
 
-	params := openai.ChatCompletionNewParams{
-		Messages: []openai.ChatCompletionMessageParamUnion{
-			openai.SystemMessage(systemPrompt),
-			openai.UserMessage(userPrompt),
-		},
-		Tools: []openai.ChatCompletionToolUnionParam{
-			{
-				OfFunction: &openai.ChatCompletionFunctionToolParam{
-					Function: submitJudgementFunction,
-				},
-			},
-		},
-		ToolChoice: openai.ToolChoiceOptionFunctionToolChoice(openai.ChatCompletionNamedToolChoiceFunctionParam{Name: submitJudgementFunction.Name}),
-		Model:      j.model,
-	}
+	combinedPrompt := systemPrompt + "\n\n" + userPrompt
 
-	// Only include seed parameter for providers that support it (e.g., OpenAI, Mistral).
-	// Gemini's v1beta OpenAI-compatible endpoint rejects the seed parameter with a 400 error.
-	// See: https://discuss.ai.google.dev/t/openai-compatibility-not-fully-implemented/95991
-	if j.supportsSeed() {
-		params.Seed = openai.Int(openaiSeed)
-	}
+	requestID := uuid.New().String()
+	resultCh := j.server.RegisterRequest(requestID)
+	defer j.server.DeregisterRequest(requestID)
 
-	completion, err := j.client.Chat.Completions.New(ctx, params)
+	manager := &judgeServerManager{server: j.server, requestID: requestID}
+	judgeRunner := j.runner.WithMcpServerInfo(manager)
+
+	result, err := judgeRunner.RunTask(ctx, combinedPrompt)
 	if err != nil {
-		return nil, fmt.Errorf("failed to call llm judge: %w", err)
+		return nil, fmt.Errorf("failed to run judge agent: %w", err)
 	}
 
-	if len(completion.Choices) == 0 {
-		return nil, fmt.Errorf("no completion choices returned from LLM")
+	estimate := result.GetTokenEstimate()
+
+	select {
+	case res := <-resultCh:
+		res.Usage = estimate.ToUsage()
+		return res, nil
+	default:
+		return nil, fmt.Errorf("judge agent completed without calling submit_judgement tool")
 	}
-
-	toolCalls := completion.Choices[0].Message.ToolCalls
-
-	if len(toolCalls) != 1 {
-		return nil, fmt.Errorf("failed to call the correct number of tools, expected 1 call, got %d", len(toolCalls))
-	}
-
-	toolCall := toolCalls[0]
-
-	if toolCall.Function.Name != submitJudgementFunction.Name {
-		return nil, fmt.Errorf("llm judge failed to call '%s' tool, called '%s' instead", submitJudgementFunction.Name, toolCall.Function.Name)
-	}
-
-	result := &LLMJudgeResult{}
-
-	err = json.Unmarshal([]byte(toolCall.Function.Arguments), result)
-	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshall '%s' tool call arguments: %w", submitJudgementFunction.Name, err)
-	}
-
-	result.Usage = &tokens.Usage{
-		InputTokens:  completion.Usage.PromptTokens,
-		OutputTokens: completion.Usage.CompletionTokens,
-		TotalTokens:  completion.Usage.TotalTokens,
-	}
-
-	return result, nil
 }
 
 func (j *llmJudge) ModelName() string {
-	return j.model
+	return j.name
+}
+
+func (j *llmJudge) Close() error {
+	j.cancel()
+	return nil
+}
+
+// translateEnvToAgentRef converts deprecated LLMJudgeEnvConfig to an agent.AgentRef.
+// It reads the environment variables specified in the config, sets the provider-specific
+// env vars that llmagent expects, and returns an AgentRef for builtin.llm-agent.
+func translateEnvToAgentRef(env *LLMJudgeEnvConfig) (*agent.AgentRef, error) {
+	baseUrl := os.Getenv(env.BaseUrlKey)
+	apiKey := os.Getenv(env.ApiKeyKey)
+	model := os.Getenv(env.ModelNameKey)
+
+	var missingVars []string
+	if baseUrl == "" {
+		missingVars = append(missingVars, fmt.Sprintf("%s (base URL)", env.BaseUrlKey))
+	}
+	if apiKey == "" {
+		missingVars = append(missingVars, fmt.Sprintf("%s (API key)", env.ApiKeyKey))
+	}
+	if model == "" {
+		missingVars = append(missingVars, fmt.Sprintf("%s (model name)", env.ModelNameKey))
+	}
+
+	if len(missingVars) > 0 {
+		return nil, fmt.Errorf("missing required environment variables for LLM judge: %v", missingVars)
+	}
+
+	// Set provider env vars so the llmagent picks them up
+	setIfEmpty := func(envVar, value string) {
+		if os.Getenv(envVar) == "" {
+			os.Setenv(envVar, value)
+		}
+	}
+	setIfEmpty("OPENAI_BASE_URL", baseUrl)
+	setIfEmpty("OPENAI_API_KEY", apiKey)
+
+	// Prepend "openai:" if bare model name
+	providerModel := model
+	if !strings.Contains(model, ":") {
+		providerModel = "openai:" + model
+	}
+
+	fmt.Fprintf(os.Stderr, "WARNING: LLM judge env config is deprecated. "+
+		"Use agent ref instead: ref: {type: builtin.llm-agent, model: %s}\n", providerModel)
+
+	return &agent.AgentRef{
+		Type:  "builtin.llm-agent",
+		Model: providerModel,
+	}, nil
 }
