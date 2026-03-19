@@ -93,16 +93,24 @@ mcpServers:
 **tasks/create-pod.yaml**:
 ```yaml
 kind: Task
+apiVersion: mcpchecker/v1alpha2
 metadata:
   name: "create-nginx-pod"
   difficulty: easy
-steps:
+
+spec:
   setup:
-    file: setup.sh
+    - script:
+        file: setup.sh
+
   verify:
-    file: verify.sh
+    - script:
+        file: verify.sh
+
   cleanup:
-    file: cleanup.sh
+    - script:
+        file: cleanup.sh
+
   prompt:
     inline: Create a nginx pod named web-server in the test-namespace
 ```

@@ -32,7 +32,7 @@ mcpchecker check eval.yaml
 
 ### Execution Order
 
-When `--parallel` is greater than 1:
+When `--parallel > 1`:
 
 1. Sequential tasks (without `parallel: true`) run first, one at a time, in order
 2. Parallel tasks run together as a batch, limited by the worker count

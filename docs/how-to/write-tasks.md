@@ -39,7 +39,7 @@ spec:
 - **verify** checks whether the agent succeeded
 - **cleanup** tears down resources after verification
 
-Each phase is an array of steps, so you can chain multiple operations.
+The phases `setup`, `verify`, and `cleanup` are arrays of steps, so you can chain multiple operations. The `prompt` is a single step object (not an array).
 
 ## Step Types
 

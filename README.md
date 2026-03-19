@@ -37,7 +37,7 @@ For hands-on tutorials, see [Quickstarts](https://github.com/mcpchecker/quicksta
 
 mcpchecker places a recording proxy between the agent and your MCP server:
 
-```
+```text
 AI Agent --> MCP Proxy (recording) --> Your MCP Server
 ```
 
