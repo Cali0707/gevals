@@ -66,6 +66,9 @@ func (c *mcpClient) GetTools() []mcpsdk.Tool {
 }
 
 func (c *mcpClient) CallTool(ctx context.Context, name string, arguments map[string]any) (string, error) {
+	if c.session == nil {
+		return "", fmt.Errorf("mcp client session not initialized")
+	}
 	result, err := c.session.CallTool(ctx, &mcpsdk.CallToolParams{
 		Name:      name,
 		Arguments: arguments,
@@ -84,10 +87,16 @@ func (c *mcpClient) CallTool(ctx context.Context, name string, arguments map[str
 }
 
 func (c *mcpClient) Close() error {
+	if c.session == nil {
+		return nil
+	}
 	return c.session.Close()
 }
 
 func (c *mcpClient) reloadTools(ctx context.Context) error {
+	if c.session == nil {
+		return nil
+	}
 	result, err := c.session.ListTools(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("failed to list tools: %w", err)
