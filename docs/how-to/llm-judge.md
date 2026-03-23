@@ -10,26 +10,41 @@ In the v1alpha2 task format, LLM judge steps can be combined with other verifica
 
 ## Setup
 
-Configure the LLM judge in your `eval.yaml`:
+Configure the LLM judge in your `eval.yaml` using an agent ref:
 
 ```yaml
 config:
   llmJudge:
-    env:
-      baseUrlKey: JUDGE_BASE_URL      # Env var name for LLM API base URL
-      apiKeyKey: JUDGE_API_KEY        # Env var name for LLM API key
-      modelNameKey: JUDGE_MODEL_NAME  # Env var name for model name
+    ref:
+      type: builtin.llm-agent
+      model: "openai:gpt-4o"
 ```
 
-Set the environment variables before running:
+The `ref` field accepts any valid agent ref. The `type` can be:
+
+- `builtin.llm-agent` — uses a built-in LLM agent. Requires a `model` in `provider:model-id` format (e.g., `openai:gpt-4o`, `anthropic:claude-sonnet-4-20250514`).
+- `builtin.claude-code` — uses Claude Code as the judge agent.
+- `file` — uses a custom agent configuration file specified by `path`.
+
+Set the appropriate environment variables for your provider before running. For example, for OpenAI:
 
 ```bash
-export JUDGE_BASE_URL="https://api.openai.com/v1"
-export JUDGE_API_KEY="sk-..."
-export JUDGE_MODEL_NAME="gpt-4o"
+export OPENAI_API_KEY="sk-..."
 ```
 
-The LLM judge supports any OpenAI-compatible API. The implementation uses the OpenAI Go SDK with a configurable base URL, so any endpoint that follows the OpenAI API format will work.
+### Deprecated: env-based config
+
+The previous `env`-based configuration is still supported but deprecated. If you are using it, you will see a warning at runtime suggesting migration to the agent ref format.
+
+```yaml
+# Deprecated — use ref instead
+config:
+  llmJudge:
+    env:
+      baseUrlKey: JUDGE_BASE_URL
+      apiKeyKey: JUDGE_API_KEY
+      modelNameKey: JUDGE_MODEL_NAME
+```
 
 ## Evaluation Modes
 
@@ -97,4 +112,4 @@ steps:
 
 ## Implementation Details
 
-Both modes use the same LLM-based evaluation approach. The difference is in the system prompt given to the judge. See [`pkg/llmjudge/prompts.go`](../../pkg/llmjudge/prompts.go) for details.
+The LLM judge runs as an agent via the agent framework. An internal MCP server exposes a `submit_judgement` tool that the judge agent calls to return its structured verdict (passed, reason, failure category). Both evaluation modes use the same approach — the difference is in the system prompt given to the judge. See [`pkg/llmjudge/prompts.go`](../../pkg/llmjudge/prompts.go) for the prompt templates.
