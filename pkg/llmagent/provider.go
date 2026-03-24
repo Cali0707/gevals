@@ -15,11 +15,14 @@ const (
 	anthropicProviderKey = "anthropic"
 	openaiProviderKey    = "openai"
 	geminiProviderKey    = "gemini"
+	googleProviderKey    = "google"
 
 	anthropicUseVertexEnvVar  = "ANTHROPIC_USE_VERTEX"
 	anthropicApiKeyEnvVar     = "ANTHROPIC_API_KEY"
 	geminiUseVertexEnvVar     = "GEMINI_USE_VERTEX"
+	googleUseVertexEnvVar     = "GOOGLE_USE_VERTEX"
 	geminiApiKeyEnvVar        = "GEMINI_API_KEY"
+	googleApiKeyEnvVar        = "GOOGLE_API_KEY"
 	googleCloudProjectEnvVar  = "GOOGLE_CLOUD_PROJECT"
 	googleCloudLocationEnvVar = "GOOGLE_CLOUD_LOCATION"
 	openaiApiKeyEnvVar        = "OPENAI_API_KEY"
@@ -48,7 +51,8 @@ type providerBuilder interface {
 
 var providerBuilders = map[string]providerBuilder{
 	anthropicProviderKey: &anthropicProviderBuilder{},
-	geminiProviderKey:    &geminiProviderBuilder{},
+	geminiProviderKey:    &googleProviderBuilder{},
+	googleProviderKey:    &googleProviderBuilder{},
 	openaiProviderKey:    &openaiProviderBuilder{},
 }
 
@@ -92,13 +96,13 @@ func (p *anthropicProviderBuilder) Build() (fantasy.Provider, error) {
 	return anthropic.New(opts...)
 }
 
-type geminiProviderBuilder struct{}
+type googleProviderBuilder struct{}
 
-func (p *geminiProviderBuilder) Build() (fantasy.Provider, error) {
+func (p *googleProviderBuilder) Build() (fantasy.Provider, error) {
 	opts := []google.Option{}
 
-	useVertex := os.Getenv(geminiUseVertexEnvVar)
-	if useVertex == "1" {
+	useVertex := os.Getenv(geminiUseVertexEnvVar) == "1" || os.Getenv(googleUseVertexEnvVar) == "1"
+	if useVertex {
 		project := os.Getenv(googleCloudProjectEnvVar)
 		if project == "" {
 			return nil, fmt.Errorf(
@@ -119,6 +123,10 @@ func (p *geminiProviderBuilder) Build() (fantasy.Provider, error) {
 		opts = append(opts, google.WithVertex(project, location))
 	} else {
 		key := os.Getenv(geminiApiKeyEnvVar)
+		if key == "" {
+			key = os.Getenv(googleApiKeyEnvVar)
+		}
+
 		if key == "" {
 			return nil, fmt.Errorf(
 				"provider gemini requires env var %q to be set (or enable Vertex AI with %q=1)",
