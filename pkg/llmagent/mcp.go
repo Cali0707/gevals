@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"sync"
+	"sync/atomic"
 
 	"github.com/mcpchecker/mcpchecker/pkg/mcpclient"
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
@@ -18,7 +19,7 @@ type McpClient interface {
 }
 
 type mcpClient struct {
-	session *mcpsdk.ClientSession
+	session atomic.Pointer[mcpsdk.ClientSession]
 	mu      sync.RWMutex
 	tools   []mcpsdk.Tool
 }
@@ -50,7 +51,7 @@ func NewMcpClient(ctx context.Context, serverURL string, headers http.Header) (M
 		return nil, fmt.Errorf("failed to connect to MCP server: %w", err)
 	}
 
-	mc.session = session
+	mc.session.Store(session)
 	err = mc.reloadTools(ctx)
 	return mc, err
 }
@@ -66,7 +67,11 @@ func (c *mcpClient) GetTools() []mcpsdk.Tool {
 }
 
 func (c *mcpClient) CallTool(ctx context.Context, name string, arguments map[string]any) (string, error) {
-	result, err := c.session.CallTool(ctx, &mcpsdk.CallToolParams{
+	session := c.session.Load()
+	if session == nil {
+		return "", fmt.Errorf("mcp client session not initialized")
+	}
+	result, err := session.CallTool(ctx, &mcpsdk.CallToolParams{
 		Name:      name,
 		Arguments: arguments,
 	})
@@ -84,11 +89,19 @@ func (c *mcpClient) CallTool(ctx context.Context, name string, arguments map[str
 }
 
 func (c *mcpClient) Close() error {
-	return c.session.Close()
+	session := c.session.Load()
+	if session == nil {
+		return nil
+	}
+	return session.Close()
 }
 
 func (c *mcpClient) reloadTools(ctx context.Context) error {
-	result, err := c.session.ListTools(ctx, nil)
+	session := c.session.Load()
+	if session == nil {
+		return nil
+	}
+	result, err := session.ListTools(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("failed to list tools: %w", err)
 	}
