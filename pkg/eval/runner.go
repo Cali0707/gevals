@@ -625,7 +625,8 @@ func (r *evalRunner) executeTaskSteps(
 		result.AgentExecutionError = true
 		// Extract agent output from phase output for backwards compatibility
 		if agentOutput != nil && len(agentOutput.Steps) > 0 {
-			if out, ok := agentOutput.Steps[0].Outputs["output"]; ok {
+			lastStep := agentOutput.Steps[len(agentOutput.Steps)-1]
+			if out, ok := lastStep.Outputs["output"]; ok {
 				result.TaskOutput = out
 			}
 		}
@@ -634,7 +635,8 @@ func (r *evalRunner) executeTaskSteps(
 
 	// Extract agent output from phase output for backwards compatibility
 	if agentOutput != nil && len(agentOutput.Steps) > 0 {
-		if out, ok := agentOutput.Steps[0].Outputs["output"]; ok {
+		lastStep := agentOutput.Steps[len(agentOutput.Steps)-1]
+		if out, ok := lastStep.Outputs["output"]; ok {
 			result.TaskOutput = out
 		}
 	}

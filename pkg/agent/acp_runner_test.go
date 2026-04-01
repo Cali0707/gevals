@@ -89,30 +89,33 @@ func TestAcpRunner_WithMcpServerInfo(t *testing.T) {
 
 func TestAcpRunnerResult_GetOutput(t *testing.T) {
 	tt := map[string]struct {
-		updates       []acp.SessionUpdate
-		checkContains string
-		checkEmpty    bool
+		updates  []acp.SessionUpdate
+		expected []OutputStep
 	}{
-		"empty updates returns no output message": {
-			updates:       []acp.SessionUpdate{},
-			checkContains: "got no output from acp agent",
+		"empty updates returns empty slice": {
+			updates:  []acp.SessionUpdate{},
+			expected: nil,
 		},
-		"nil updates returns no output message": {
-			updates:       nil,
-			checkContains: "got no output from acp agent",
+		"nil updates returns empty slice": {
+			updates:  nil,
+			expected: nil,
 		},
-		"valid updates marshal to JSON": {
+		"single message update returns message step": {
 			updates: []acp.SessionUpdate{
 				acp.UpdateAgentMessageText("Hello world"),
 			},
-			checkContains: "Hello world",
+			expected: []OutputStep{
+				{Type: "message", Content: "Hello world"},
+			},
 		},
-		"multiple updates marshal to JSON array": {
+		"consecutive message updates are consolidated": {
 			updates: []acp.SessionUpdate{
 				acp.UpdateAgentMessageText("First"),
 				acp.UpdateAgentMessageText("Second"),
 			},
-			checkContains: "Second",
+			expected: []OutputStep{
+				{Type: "message", Content: "FirstSecond"},
+			},
 		},
 	}
 
@@ -123,15 +126,13 @@ func TestAcpRunnerResult_GetOutput(t *testing.T) {
 			}
 
 			output := result.GetOutput()
-			if tc.checkContains != "" {
-				assert.Contains(t, output, tc.checkContains)
-			}
+			assert.Equal(t, tc.expected, output)
 		})
 	}
 }
 
 func TestAcpRunnerResult_GetOutput_WithAgentMessageChunk(t *testing.T) {
-	// Test that updates with AgentMessageChunk marshal correctly
+	// Test that updates with AgentMessageChunk return a message OutputStep
 	result := &acpResult{
 		updates: []acp.SessionUpdate{
 			acp.UpdateAgentMessageText("Final message"),
@@ -139,9 +140,10 @@ func TestAcpRunnerResult_GetOutput_WithAgentMessageChunk(t *testing.T) {
 	}
 
 	output := result.GetOutput()
-	assert.Contains(t, output, "Final message")
-	// Should be valid JSON
-	assert.True(t, len(output) > 0)
+	expected := []OutputStep{
+		{Type: "message", Content: "Final message"},
+	}
+	assert.Equal(t, expected, output)
 }
 
 // mockServer implements mcpproxy.Server for testing

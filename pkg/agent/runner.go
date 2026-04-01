@@ -35,6 +35,13 @@ type ToolCallSummary struct {
 	RawOutput any    `json:"rawOutput,omitempty"`
 }
 
+// OutputStep represents a single logical step in the agent's output.
+type OutputStep struct {
+	Type     string           `json:"type"`              // "thinking", "message", "tool_call"
+	Content  string           `json:"content,omitempty"` // text for thinking/message steps
+	ToolCall *ToolCallSummary `json:"toolCall,omitempty"`
+}
+
 // ExtractToolCalls extracts deduplicated tool call summaries from ACP session updates.
 // It merges data from both ToolCall (initial) and ToolCallUpdate (subsequent) messages.
 func ExtractToolCalls(updates []acp.SessionUpdate) []ToolCallSummary {
@@ -118,6 +125,124 @@ func ExtractThinking(updates []acp.SessionUpdate) string {
 	return thinking.String()
 }
 
+// ExtractOutputSteps processes ACP session updates into chronological OutputStep slices.
+// Consecutive thinking chunks are consolidated into a single "thinking" step,
+// consecutive message chunks into a single "message" step, and tool calls
+// (deduplicated by ID, merged with ToolCallUpdate data) become "tool_call" steps.
+// Non-consecutive runs of the same type produce separate steps.
+func ExtractOutputSteps(updates []acp.SessionUpdate) []OutputStep {
+	var steps []OutputStep
+	var currentType string
+	var buf strings.Builder
+
+	// Track tool calls for dedup/merge, same pattern as ExtractToolCalls
+	toolCallMap := make(map[acp.ToolCallId]*ToolCallSummary)
+	var toolCallOrder []acp.ToolCallId
+
+	flush := func() {
+		if currentType == "" {
+			return
+		}
+		if currentType == "thinking" || currentType == "message" {
+			if buf.Len() > 0 {
+				steps = append(steps, OutputStep{
+					Type:    currentType,
+					Content: buf.String(),
+				})
+				buf.Reset()
+			}
+		}
+		currentType = ""
+	}
+
+	for _, update := range updates {
+		isThinking := update.AgentThoughtChunk != nil && update.AgentThoughtChunk.Content.Text != nil
+		isMessage := update.AgentMessageChunk != nil && update.AgentMessageChunk.Content.Text != nil
+		isToolCall := update.ToolCall != nil
+		isToolCallUpdate := update.ToolCallUpdate != nil
+
+		if isThinking {
+			if currentType != "thinking" {
+				flush()
+				currentType = "thinking"
+			}
+			buf.WriteString(update.AgentThoughtChunk.Content.Text.Text)
+		}
+
+		if isMessage {
+			if currentType != "message" {
+				flush()
+				currentType = "message"
+			}
+			buf.WriteString(update.AgentMessageChunk.Content.Text.Text)
+		}
+
+		if isToolCall {
+			flush()
+			id := update.ToolCall.ToolCallId
+			if _, exists := toolCallMap[id]; !exists {
+				toolCallOrder = append(toolCallOrder, id)
+				tc := &ToolCallSummary{
+					Title:     update.ToolCall.Title,
+					Kind:      string(update.ToolCall.Kind),
+					Status:    string(update.ToolCall.Status),
+					RawInput:  update.ToolCall.RawInput,
+					RawOutput: update.ToolCall.RawOutput,
+				}
+				toolCallMap[id] = tc
+				steps = append(steps, OutputStep{
+					Type:     "tool_call",
+					ToolCall: tc,
+				})
+			}
+		}
+
+		if isToolCallUpdate {
+			id := update.ToolCallUpdate.ToolCallId
+			tc, exists := toolCallMap[id]
+			if !exists {
+				flush()
+				toolCallOrder = append(toolCallOrder, id)
+				tc = &ToolCallSummary{}
+				toolCallMap[id] = tc
+				steps = append(steps, OutputStep{
+					Type:     "tool_call",
+					ToolCall: tc,
+				})
+			}
+			if update.ToolCallUpdate.Title != nil {
+				tc.Title = *update.ToolCallUpdate.Title
+			}
+			if update.ToolCallUpdate.Kind != nil {
+				tc.Kind = string(*update.ToolCallUpdate.Kind)
+			}
+			if update.ToolCallUpdate.Status != nil {
+				tc.Status = string(*update.ToolCallUpdate.Status)
+			}
+			if update.ToolCallUpdate.RawInput != nil {
+				tc.RawInput = update.ToolCallUpdate.RawInput
+			}
+			if update.ToolCallUpdate.RawOutput != nil {
+				tc.RawOutput = update.ToolCallUpdate.RawOutput
+			}
+		}
+	}
+
+	flush()
+	return steps
+}
+
+// FinalMessageFromSteps concatenates the Content from all "message"-type OutputSteps.
+func FinalMessageFromSteps(steps []OutputStep) string {
+	var sb strings.Builder
+	for _, s := range steps {
+		if s.Type == "message" {
+			sb.WriteString(s.Content)
+		}
+	}
+	return sb.String()
+}
+
 // turnBuilder accumulates session update data and produces per-turn token counts.
 type turnBuilder struct {
 	tok            tokenizer.Tokenizer
@@ -189,10 +314,8 @@ func ExtractTurns(updates []acp.SessionUpdate) []tokens.TurnTokens {
 
 // AgentResult provides access to the results of an agent execution.
 type AgentResult interface {
-	GetOutput() string
-	GetFinalMessage() string
+	GetOutput() []OutputStep
 	GetToolCalls() []ToolCallSummary
-	GetThinking() string
 	GetRawUpdates() any
 	GetTokenEstimate() tokens.Estimate
 }
@@ -206,20 +329,12 @@ type agentSpecRunnerResult struct {
 	commandOutput string
 }
 
-func (a *agentSpecRunnerResult) GetOutput() string {
-	return a.commandOutput
-}
-
-func (a *agentSpecRunnerResult) GetFinalMessage() string {
-	return a.commandOutput // Shell output is the final message
+func (a *agentSpecRunnerResult) GetOutput() []OutputStep {
+	return []OutputStep{{Type: "message", Content: a.commandOutput}}
 }
 
 func (a *agentSpecRunnerResult) GetToolCalls() []ToolCallSummary {
 	return nil // Shell runner doesn't have structured tool call data
-}
-
-func (a *agentSpecRunnerResult) GetThinking() string {
-	return "" // Shell runner doesn't capture thinking
 }
 
 func (a *agentSpecRunnerResult) GetRawUpdates() any {
