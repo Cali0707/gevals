@@ -371,12 +371,12 @@ func TestFinalMessageFromSteps(t *testing.T) {
 			},
 			expected: "hello",
 		},
-		"multiple message steps concatenated": {
+		"multiple message steps returns last": {
 			steps: []agent.OutputStep{
 				{Type: "message", Content: "hello "},
 				{Type: "message", Content: "world"},
 			},
-			expected: "hello world",
+			expected: "world",
 		},
 		"ignores non-message steps": {
 			steps: []agent.OutputStep{
@@ -386,7 +386,7 @@ func TestFinalMessageFromSteps(t *testing.T) {
 			},
 			expected: "result",
 		},
-		"mixed steps extracts only messages": {
+		"mixed steps returns last message": {
 			steps: []agent.OutputStep{
 				{Type: "thinking", Content: "let me think"},
 				{Type: "tool_call", ToolCall: &agent.ToolCallSummary{Title: "Read"}},
@@ -394,7 +394,7 @@ func TestFinalMessageFromSteps(t *testing.T) {
 				{Type: "tool_call", ToolCall: &agent.ToolCallSummary{Title: "Write"}},
 				{Type: "message", Content: "second"},
 			},
-			expected: "first second",
+			expected: "second",
 		},
 	}
 

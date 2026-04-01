@@ -350,7 +350,6 @@ func (r *taskRunner) RunAgent(ctx context.Context, agentRunner agent.Runner) (*P
 				Type:    "message",
 				Success: true,
 				Message: os.Content,
-				Outputs: map[string]string{"output": os.Content},
 			})
 		case "tool_call":
 			step := &steps.StepOutput{

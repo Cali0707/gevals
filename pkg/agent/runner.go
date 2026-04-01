@@ -194,6 +194,23 @@ func ExtractOutputSteps(updates []acp.SessionUpdate) []OutputStep {
 					Type:     "tool_call",
 					ToolCall: tc,
 				})
+			} else {
+				tc := toolCallMap[id]
+				if update.ToolCall.Title != "" {
+					tc.Title = update.ToolCall.Title
+				}
+				if string(update.ToolCall.Kind) != "" {
+					tc.Kind = string(update.ToolCall.Kind)
+				}
+				if string(update.ToolCall.Status) != "" {
+					tc.Status = string(update.ToolCall.Status)
+				}
+				if update.ToolCall.RawInput != nil {
+					tc.RawInput = update.ToolCall.RawInput
+				}
+				if update.ToolCall.RawOutput != nil {
+					tc.RawOutput = update.ToolCall.RawOutput
+				}
 			}
 		}
 
@@ -232,15 +249,14 @@ func ExtractOutputSteps(updates []acp.SessionUpdate) []OutputStep {
 	return steps
 }
 
-// FinalMessageFromSteps concatenates the Content from all "message"-type OutputSteps.
+// FinalMessageFromSteps returns the content of the last "message"-type OutputStep.
 func FinalMessageFromSteps(steps []OutputStep) string {
-	var sb strings.Builder
-	for _, s := range steps {
-		if s.Type == "message" {
-			sb.WriteString(s.Content)
+	for i := len(steps) - 1; i >= 0; i-- {
+		if steps[i].Type == "message" {
+			return steps[i].Content
 		}
 	}
-	return sb.String()
+	return ""
 }
 
 // turnBuilder accumulates session update data and produces per-turn token counts.
