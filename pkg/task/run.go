@@ -18,8 +18,7 @@ import (
 type AgentDetails struct {
 	TokenEstimate *tokens.Estimate        `json:"tokenEstimate,omitempty"`
 	ToolCalls     []agent.ToolCallSummary `json:"toolCalls,omitempty"`
-	FinalMessage  string                  `json:"finalMessage,omitempty"`
-	Thinking      string                  `json:"thinking,omitempty"`
+	OutputSteps   []agent.OutputStep      `json:"outputSteps,omitempty"`
 }
 
 // PhaseOutput represents the output from a task phase (setup, agent, verify, or cleanup).
@@ -324,29 +323,50 @@ func (r *taskRunner) RunAgent(ctx context.Context, agentRunner agent.Runner) (*P
 		}, detailErr
 	}
 
-	output := result.GetOutput()
-	r.output = output
+	outputSteps := result.GetOutput()
+	finalMessage := agent.FinalMessageFromSteps(outputSteps)
+	r.output = finalMessage
 
 	// Capture structured agent details
 	tokenEstimate := result.GetTokenEstimate()
 	agentDetails := &AgentDetails{
 		TokenEstimate: &tokenEstimate,
 		ToolCalls:     result.GetToolCalls(),
-		FinalMessage:  result.GetFinalMessage(),
-		Thinking:      result.GetThinking(),
+		OutputSteps:   outputSteps,
+	}
+
+	// Convert each OutputStep to a StepOutput for the phase
+	phaseSteps := make([]*steps.StepOutput, 0, len(outputSteps))
+	for _, os := range outputSteps {
+		switch os.Type {
+		case "thinking":
+			phaseSteps = append(phaseSteps, &steps.StepOutput{
+				Type:    "thinking",
+				Success: true,
+				Message: os.Content,
+			})
+		case "message":
+			phaseSteps = append(phaseSteps, &steps.StepOutput{
+				Type:    "message",
+				Success: true,
+				Message: os.Content,
+			})
+		case "tool_call":
+			step := &steps.StepOutput{
+				Type:    "tool_call",
+				Success: true,
+			}
+			if os.ToolCall != nil {
+				step.Message = os.ToolCall.Title
+			}
+			phaseSteps = append(phaseSteps, step)
+		}
 	}
 
 	return &PhaseOutput{
 		Success:      true,
 		AgentDetails: agentDetails,
-		Steps: []*steps.StepOutput{{
-			Type:    "agent",
-			Success: true,
-			Message: output,
-			Outputs: map[string]string{
-				"output": output,
-			},
-		}},
+		Steps:        phaseSteps,
 	}, nil
 }
 

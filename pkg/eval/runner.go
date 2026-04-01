@@ -623,20 +623,14 @@ func (r *evalRunner) executeTaskSteps(
 		result.TaskPassed = false
 		result.TaskError = err.Error()
 		result.AgentExecutionError = true
-		// Extract agent output from phase output for backwards compatibility
-		if agentOutput != nil && len(agentOutput.Steps) > 0 {
-			if out, ok := agentOutput.Steps[0].Outputs["output"]; ok {
-				result.TaskOutput = out
-			}
+		if agentOutput != nil && agentOutput.AgentDetails != nil {
+			result.TaskOutput = agent.FinalMessageFromSteps(agentOutput.AgentDetails.OutputSteps)
 		}
 		return
 	}
 
-	// Extract agent output from phase output for backwards compatibility
-	if agentOutput != nil && len(agentOutput.Steps) > 0 {
-		if out, ok := agentOutput.Steps[0].Outputs["output"]; ok {
-			result.TaskOutput = out
-		}
+	if agentOutput != nil && agentOutput.AgentDetails != nil {
+		result.TaskOutput = agent.FinalMessageFromSteps(agentOutput.AgentDetails.OutputSteps)
 	}
 
 	// Extract token estimate from agent details

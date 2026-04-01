@@ -1,8 +1,6 @@
 package agent
 
 import (
-	"encoding/json"
-
 	"github.com/coder/acp-go-sdk"
 	"github.com/mcpchecker/mcpchecker/pkg/tokens"
 )
@@ -16,25 +14,11 @@ type acpResult struct {
 
 var _ AgentResult = &acpResult{}
 
-func (res *acpResult) GetOutput() string {
-	if len(res.updates) == 0 {
-		return "got no output from acp agent"
-	}
-
-	out, err := json.Marshal(res.updates)
-	if err != nil {
-		lastUpdate := res.updates[len(res.updates)-1]
-		if lastUpdate.AgentMessageChunk != nil &&
-			lastUpdate.AgentMessageChunk.Content.Text != nil {
-			return lastUpdate.AgentMessageChunk.Content.Text.Text
-		}
-		return "unable to get agent output from last acp update"
-	}
-
-	return string(out)
+func (res *acpResult) GetOutput() []OutputStep {
+	return ExtractOutputSteps(res.updates)
 }
 
-func (res *acpResult) GetFinalMessage() string {
+func (res *acpResult) getFinalMessage() string {
 	return ExtractFinalMessage(res.updates)
 }
 
@@ -42,7 +26,7 @@ func (res *acpResult) GetToolCalls() []ToolCallSummary {
 	return ExtractToolCalls(res.updates)
 }
 
-func (res *acpResult) GetThinking() string {
+func (res *acpResult) getThinking() string {
 	return ExtractThinking(res.updates)
 }
 
@@ -53,8 +37,8 @@ func (res *acpResult) GetRawUpdates() any {
 func (res *acpResult) GetTokenEstimate() tokens.Estimate {
 	estimate := tokens.ComputeEstimate(
 		res.prompt,
-		res.GetFinalMessage(),
-		res.GetThinking(),
+		res.getFinalMessage(),
+		res.getThinking(),
 		toolCallSummaryToToolCallData(res.GetToolCalls()),
 	)
 	estimate.Source = tokens.SourceEstimated

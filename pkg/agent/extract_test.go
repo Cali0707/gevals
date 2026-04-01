@@ -231,3 +231,176 @@ func TestExtractThinking(t *testing.T) {
 		})
 	}
 }
+
+func TestExtractOutputSteps(t *testing.T) {
+	title := "Read File"
+
+	tt := map[string]struct {
+		updates  []acp.SessionUpdate
+		expected []agent.OutputStep
+	}{
+		"nil updates": {
+			updates:  nil,
+			expected: nil,
+		},
+		"empty updates": {
+			updates:  []acp.SessionUpdate{},
+			expected: nil,
+		},
+		"consecutive thinking chunks consolidated": {
+			updates: []acp.SessionUpdate{
+				acp.UpdateAgentThoughtText("Let me "),
+				acp.UpdateAgentThoughtText("think about this."),
+			},
+			expected: []agent.OutputStep{
+				{Type: "thinking", Content: "Let me think about this."},
+			},
+		},
+		"consecutive message chunks consolidated": {
+			updates: []acp.SessionUpdate{
+				acp.UpdateAgentMessageText("Hello "),
+				acp.UpdateAgentMessageText("world!"),
+			},
+			expected: []agent.OutputStep{
+				{Type: "message", Content: "Hello world!"},
+			},
+		},
+		"interleaved thinking, tool_call, message produces 3 steps": {
+			updates: []acp.SessionUpdate{
+				acp.UpdateAgentThoughtText("thinking..."),
+				{
+					ToolCall: &acp.SessionUpdateToolCall{
+						ToolCallId: "tc-1",
+						Title:      "Read File",
+						Kind:       "read",
+						Status:     "running",
+					},
+				},
+				acp.UpdateAgentMessageText("done"),
+			},
+			expected: []agent.OutputStep{
+				{Type: "thinking", Content: "thinking..."},
+				{Type: "tool_call", ToolCall: &agent.ToolCallSummary{
+					Title:  "Read File",
+					Kind:   "read",
+					Status: "running",
+				}},
+				{Type: "message", Content: "done"},
+			},
+		},
+		"tool call dedup merges ToolCallUpdate": {
+			updates: []acp.SessionUpdate{
+				{
+					ToolCall: &acp.SessionUpdateToolCall{
+						ToolCallId: "tc-1",
+						Title:      "Read File",
+						RawInput:   map[string]any{"path": "/tmp/test"},
+					},
+				},
+				{
+					ToolCallUpdate: &acp.SessionToolCallUpdate{
+						ToolCallId: "tc-1",
+						Title:      &title,
+						RawOutput:  map[string]any{"content": "hello"},
+					},
+				},
+			},
+			expected: []agent.OutputStep{
+				{Type: "tool_call", ToolCall: &agent.ToolCallSummary{
+					Title:     "Read File",
+					RawInput:  map[string]any{"path": "/tmp/test"},
+					RawOutput: map[string]any{"content": "hello"},
+				}},
+			},
+		},
+		"non-consecutive thinking produces separate steps": {
+			updates: []acp.SessionUpdate{
+				acp.UpdateAgentThoughtText("first thought"),
+				acp.UpdateAgentMessageText("message"),
+				acp.UpdateAgentThoughtText("second thought"),
+			},
+			expected: []agent.OutputStep{
+				{Type: "thinking", Content: "first thought"},
+				{Type: "message", Content: "message"},
+				{Type: "thinking", Content: "second thought"},
+			},
+		},
+		"ToolCallUpdate without prior ToolCall creates step": {
+			updates: []acp.SessionUpdate{
+				{
+					ToolCallUpdate: &acp.SessionToolCallUpdate{
+						ToolCallId: "tc-1",
+						Title:      &title,
+						RawOutput:  "result data",
+					},
+				},
+			},
+			expected: []agent.OutputStep{
+				{Type: "tool_call", ToolCall: &agent.ToolCallSummary{
+					Title:     "Read File",
+					RawOutput: "result data",
+				}},
+			},
+		},
+	}
+
+	for name, tc := range tt {
+		t.Run(name, func(t *testing.T) {
+			result := agent.ExtractOutputSteps(tc.updates)
+			assert.Equal(t, tc.expected, result)
+		})
+	}
+}
+
+func TestFinalMessageFromSteps(t *testing.T) {
+	tt := map[string]struct {
+		steps    []agent.OutputStep
+		expected string
+	}{
+		"nil steps": {
+			steps:    nil,
+			expected: "",
+		},
+		"empty steps": {
+			steps:    []agent.OutputStep{},
+			expected: "",
+		},
+		"single message step": {
+			steps: []agent.OutputStep{
+				{Type: "message", Content: "hello"},
+			},
+			expected: "hello",
+		},
+		"multiple message steps returns last": {
+			steps: []agent.OutputStep{
+				{Type: "message", Content: "hello "},
+				{Type: "message", Content: "world"},
+			},
+			expected: "world",
+		},
+		"ignores non-message steps": {
+			steps: []agent.OutputStep{
+				{Type: "thinking", Content: "thinking..."},
+				{Type: "message", Content: "result"},
+				{Type: "tool_call", ToolCall: &agent.ToolCallSummary{Title: "Read"}},
+			},
+			expected: "result",
+		},
+		"mixed steps returns last message": {
+			steps: []agent.OutputStep{
+				{Type: "thinking", Content: "let me think"},
+				{Type: "tool_call", ToolCall: &agent.ToolCallSummary{Title: "Read"}},
+				{Type: "message", Content: "first "},
+				{Type: "tool_call", ToolCall: &agent.ToolCallSummary{Title: "Write"}},
+				{Type: "message", Content: "second"},
+			},
+			expected: "second",
+		},
+	}
+
+	for name, tc := range tt {
+		t.Run(name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, agent.FinalMessageFromSteps(tc.steps))
+		})
+	}
+}
