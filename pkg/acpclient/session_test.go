@@ -43,12 +43,12 @@ func (m *mockServerManager) GetCallHistoryForServer(_ string) (mcpproxy.CallHist
 func TestSession_IsAllowedToolCall(t *testing.T) {
 	tt := map[string]struct {
 		allowedTools []*mcp.Tool
-		call         acp.RequestPermissionToolCall
+		call         acp.ToolCallUpdate
 		expected     bool
 	}{
 		"allowed when tool title matches": {
 			allowedTools: []*mcp.Tool{{Name: "read_file", Title: "Read File"}},
-			call: acp.RequestPermissionToolCall{
+			call: acp.ToolCallUpdate{
 				ToolCallId: "call-1",
 				Title:      ptr("Read File"),
 			},
@@ -56,7 +56,7 @@ func TestSession_IsAllowedToolCall(t *testing.T) {
 		},
 		"not allowed when tool title does not match": {
 			allowedTools: []*mcp.Tool{{Name: "read_file", Title: "Read File"}},
-			call: acp.RequestPermissionToolCall{
+			call: acp.ToolCallUpdate{
 				ToolCallId: "call-1",
 				Title:      ptr("Delete File"),
 			},
@@ -64,7 +64,7 @@ func TestSession_IsAllowedToolCall(t *testing.T) {
 		},
 		"not allowed when no tools configured": {
 			allowedTools: []*mcp.Tool{},
-			call: acp.RequestPermissionToolCall{
+			call: acp.ToolCallUpdate{
 				ToolCallId: "call-1",
 				Title:      ptr("Read File"),
 			},
@@ -72,7 +72,7 @@ func TestSession_IsAllowedToolCall(t *testing.T) {
 		},
 		"not allowed when title is nil and no prior update": {
 			allowedTools: []*mcp.Tool{{Name: "read_file", Title: "Read File"}},
-			call: acp.RequestPermissionToolCall{
+			call: acp.ToolCallUpdate{
 				ToolCallId: "call-1",
 				Title:      nil,
 			},
@@ -111,7 +111,7 @@ func TestSession_IsAllowedToolCall_WithPriorUpdate(t *testing.T) {
 	}
 
 	// Now check with a call that has no title - should use stored title
-	call := acp.RequestPermissionToolCall{
+	call := acp.ToolCallUpdate{
 		ToolCallId: "call-1",
 		Title:      nil,
 	}
@@ -308,7 +308,7 @@ func TestSession_IsAllowedToolCall_FuzzyMatching(t *testing.T) {
 			}
 			s := NewSession(mgr)
 
-			call := acp.RequestPermissionToolCall{
+			call := acp.ToolCallUpdate{
 				ToolCallId: "call-1",
 				Title:      ptr(tc.callTitle),
 			}

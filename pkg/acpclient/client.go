@@ -129,7 +129,7 @@ func (c *client) run(ctx context.Context, prompt string, servers mcpproxy.Server
 		}
 
 		mcpServers = append(mcpServers, acp.McpServer{
-			Http: &acp.McpServerHttp{
+			Http: &acp.McpServerHttpInline{
 				Name:    srv.GetName(),
 				Url:     cfg.URL,
 				Type:    mcpclient.TransportTypeHttp,

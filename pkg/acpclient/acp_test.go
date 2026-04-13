@@ -25,7 +25,7 @@ func TestClient_RequestPermission(t *testing.T) {
 			},
 			params: acp.RequestPermissionRequest{
 				SessionId: "session-1",
-				ToolCall: acp.RequestPermissionToolCall{
+				ToolCall: acp.ToolCallUpdate{
 					ToolCallId: "call-1",
 					Title:      ptr("Read File"),
 				},
@@ -42,7 +42,7 @@ func TestClient_RequestPermission(t *testing.T) {
 			},
 			params: acp.RequestPermissionRequest{
 				SessionId: "session-1",
-				ToolCall: acp.RequestPermissionToolCall{
+				ToolCall: acp.ToolCallUpdate{
 					ToolCallId: "call-1",
 					Title:      ptr("Read File"),
 				},
@@ -59,7 +59,7 @@ func TestClient_RequestPermission(t *testing.T) {
 			},
 			params: acp.RequestPermissionRequest{
 				SessionId: "session-1",
-				ToolCall: acp.RequestPermissionToolCall{
+				ToolCall: acp.ToolCallUpdate{
 					ToolCallId: "call-1",
 					Title:      ptr("Delete File"),
 				},
@@ -75,7 +75,7 @@ func TestClient_RequestPermission(t *testing.T) {
 			sessions: map[acp.SessionId]*session{},
 			params: acp.RequestPermissionRequest{
 				SessionId: "nonexistent",
-				ToolCall: acp.RequestPermissionToolCall{
+				ToolCall: acp.ToolCallUpdate{
 					ToolCallId: "call-1",
 					Title:      ptr("Read File"),
 				},
@@ -92,7 +92,7 @@ func TestClient_RequestPermission(t *testing.T) {
 			},
 			params: acp.RequestPermissionRequest{
 				SessionId: "session-1",
-				ToolCall: acp.RequestPermissionToolCall{
+				ToolCall: acp.ToolCallUpdate{
 					ToolCallId: "call-1",
 					Title:      ptr("Read File"),
 				},

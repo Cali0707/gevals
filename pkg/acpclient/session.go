@@ -24,7 +24,7 @@ func NewSession(mcpServers mcpproxy.ServerManager) *session {
 	}
 }
 
-func (s *session) recordPermissionToolCall(call acp.RequestPermissionToolCall) {
+func (s *session) recordPermissionToolCall(call acp.ToolCallUpdate) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -41,7 +41,7 @@ func (s *session) recordPermissionToolCall(call acp.RequestPermissionToolCall) {
 	})
 }
 
-func (s *session) isAllowedToolCall(ctx context.Context, call acp.RequestPermissionToolCall) bool {
+func (s *session) isAllowedToolCall(ctx context.Context, call acp.ToolCallUpdate) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
