@@ -4,7 +4,7 @@ go 1.26.1
 
 require (
 	charm.land/fantasy v0.17.1
-	github.com/coder/acp-go-sdk v0.6.3
+	github.com/coder/acp-go-sdk v0.6.4-0.20260227160919-584abe6abe22
 	github.com/fatih/color v1.19.0
 	github.com/genmcp/gen-mcp v0.2.3
 	github.com/google/jsonschema-go v0.4.2
