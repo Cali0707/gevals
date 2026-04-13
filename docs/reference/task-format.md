@@ -33,6 +33,10 @@ spec:
   requires:           # Optional. Extension requirements.
     - extension: string
 
+  limits:             # Optional. Timeout constraints for this task.
+    timeout: string   #   Max duration for setup + agent + verify (e.g., '15m', '1h').
+    cleanupTimeout: string  #   Max duration for cleanup phase (e.g., '5m').
+
   setup:              # Optional. Steps to run before the agent.
     - stepType: { ... }
 
@@ -304,6 +308,68 @@ mcpchecker check eval.yaml
 # Override to run each task 10 times
 mcpchecker check eval.yaml --runs 10
 ```
+
+## Task Timeouts
+
+Tasks can have timeout limits to prevent indefinite execution (e.g., when an agent gets stuck in a loop).
+
+### Task-level timeout
+
+Set `spec.limits.timeout` to limit the combined duration of setup, agent, and verify phases:
+
+```yaml
+spec:
+  limits:
+    timeout: "15m"
+    cleanupTimeout: "5m"
+```
+
+- **timeout** -- Maximum time for setup + agent + verify. When exceeded, the task is cancelled and marked as failed with a timeout error.
+- **cleanupTimeout** -- Maximum time for the cleanup phase. Cleanup always runs, even after a timeout, using its own independent timeout.
+
+If neither is set, there is no timeout (backward-compatible).
+
+### Eval-level defaults
+
+Set default limits for all tasks in the eval config:
+
+```yaml
+kind: Eval
+metadata:
+  name: my-eval
+config:
+  defaultTaskLimits:
+    timeout: "30m"
+    cleanupTimeout: "5m"
+  # ...
+```
+
+Individual tasks can override these defaults via `spec.limits`.
+
+### CLI overrides
+
+The `check` command provides four timeout flags:
+
+| Flag | Effect |
+|------|--------|
+| `--default-task-timeout` | Overrides `defaultTaskLimits.timeout` for tasks that don't specify their own |
+| `--task-timeout` | Hard override -- applies to ALL tasks regardless of their `spec.limits` |
+| `--default-cleanup-timeout` | Same pattern for cleanup timeouts |
+| `--cleanup-timeout` | Hard override for ALL cleanup timeouts |
+
+### Precedence
+
+Timeouts are resolved in this order (highest priority first):
+
+1. `--task-timeout` / `--cleanup-timeout` (CLI hard override)
+2. `spec.limits.timeout` / `spec.limits.cleanupTimeout` (per-task)
+3. `--default-task-timeout` / `--default-cleanup-timeout` (CLI default override)
+4. `config.defaultTaskLimits.timeout` / `config.defaultTaskLimits.cleanupTimeout` (eval YAML)
+5. No timeout
+
+### Interaction with step-level timeouts
+
+Individual `script` and `http` steps have their own timeouts (default: 5 minutes). Step timeouts nest inside the task timeout -- if the task timeout expires, all running steps are cancelled. Step timeouts remain useful for bounding individual operations within a larger task budget.
 
 ## Complete Example
 
