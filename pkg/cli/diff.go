@@ -47,8 +47,8 @@ Shows regressions, improvements, new tasks, removed tasks, and overall pass rate
 Useful for posting on pull requests to show impact of changes.
 
 Example:
-  mcpchecker diff --base results-main.json --current results-pr.json
-  mcpchecker diff --base results-main.json --current results-pr.json --output markdown`,
+  mcpchecker result diff --base results-main.json --current results-pr.json
+  mcpchecker result diff --base results-main.json --current results-pr.json --output markdown`,
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
