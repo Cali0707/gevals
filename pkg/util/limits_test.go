@@ -53,6 +53,10 @@ func TestLimits_GetTimeout(t *testing.T) {
 			limits: &Limits{Timeout: "30"},
 			hasErr: true,
 		},
+		"negative duration": {
+			limits: &Limits{Timeout: "-30s"},
+			hasErr: true,
+		},
 	}
 
 	for name, tc := range tests {

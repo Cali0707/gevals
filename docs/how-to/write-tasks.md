@@ -245,7 +245,8 @@ mcpchecker check eval.yaml --default-task-timeout 20m
 mcpchecker check eval.yaml --task-timeout 10m
 
 # Same pattern for cleanup
-mcpchecker check eval.yaml --cleanup-timeout 5m
+mcpchecker check eval.yaml --default-cleanup-timeout 5m
+mcpchekcer check eval.yaml --cleanup-timeout 5m
 ```
 
 For the full precedence rules, see [Task Timeouts](../reference/task-format.md#task-timeouts) in the reference.
