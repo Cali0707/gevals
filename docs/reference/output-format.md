@@ -41,16 +41,16 @@ Use the CLI to inspect results:
 
 ```bash
 # Pretty-print results
-mcpchecker view mcpchecker-my-eval-out.json
+mcpchecker result view mcpchecker-my-eval-out.json
 
 # Show a compact summary
-mcpchecker summary mcpchecker-my-eval-out.json
+mcpchecker result summary mcpchecker-my-eval-out.json
 
 # Compare two runs
-mcpchecker diff run1-out.json run2-out.json
+mcpchecker result diff run1-out.json run2-out.json
 
 # Verify results meet thresholds
-mcpchecker verify mcpchecker-my-eval-out.json
+mcpchecker result verify mcpchecker-my-eval-out.json
 ```
 
 See the [CLI reference](cli/mcpchecker.md) for full details on each command.
