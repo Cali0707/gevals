@@ -178,17 +178,17 @@ runs:
         echo "results-file=$RESULTS_FILE" >> $GITHUB_OUTPUT
 
         # Output metrics in GitHub Actions format
-        "$MCPCHECKER" summary "$RESULTS_FILE" --github-output >> $GITHUB_OUTPUT
+        "$MCPCHECKER" result summary "$RESULTS_FILE" --github-output >> $GITHUB_OUTPUT
 
         # Display human-readable summary
-        "$MCPCHECKER" summary "$RESULTS_FILE"
+        "$MCPCHECKER" result summary "$RESULTS_FILE"
 
         # Verify thresholds
         TASK_THRESHOLD="${{ inputs.task-pass-threshold }}"
         ASSERTION_THRESHOLD="${{ inputs.assertion-pass-threshold }}"
 
         set +e
-        "$MCPCHECKER" verify "$RESULTS_FILE" --task "$TASK_THRESHOLD" --assertion "$ASSERTION_THRESHOLD"
+        "$MCPCHECKER" result verify "$RESULTS_FILE" --task "$TASK_THRESHOLD" --assertion "$ASSERTION_THRESHOLD"
         VERIFY_EXIT_CODE=$?
         set -e
 
