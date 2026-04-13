@@ -43,7 +43,12 @@ func (c *client) RequestPermission(ctx context.Context, params acp.RequestPermis
 		}
 
 		return acp.RequestPermissionResponse{
-			Outcome: acp.NewRequestPermissionOutcomeSelected(bestOpt.OptionId),
+			Outcome: acp.RequestPermissionOutcome{
+				Selected: &acp.RequestPermissionOutcomeSelected{
+					Outcome:  "selected",
+					OptionId: bestOpt.OptionId,
+				},
+			},
 		}, nil
 	}
 
@@ -65,7 +70,12 @@ func (c *client) RequestPermission(ctx context.Context, params acp.RequestPermis
 		return acp.RequestPermissionResponse{}, fmt.Errorf("no reject option provided")
 	}
 
-	return acp.RequestPermissionResponse{Outcome: acp.NewRequestPermissionOutcomeSelected(bestOpt.OptionId)}, nil
+	return acp.RequestPermissionResponse{Outcome: acp.RequestPermissionOutcome{
+		Selected: &acp.RequestPermissionOutcomeSelected{
+			Outcome:  "selected",
+			OptionId: bestOpt.OptionId,
+		},
+	}}, nil
 }
 
 // Notification containing a session update from the agent.

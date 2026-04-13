@@ -165,6 +165,10 @@ func (a *acpAgent) SetSessionMode(_ context.Context, _ acp.SetSessionModeRequest
 	return acp.SetSessionModeResponse{}, nil
 }
 
+func (a *acpAgent) SetSessionConfigOption(_ context.Context, _ acp.SetSessionConfigOptionRequest) (acp.SetSessionConfigOptionResponse, error) {
+	return acp.SetSessionConfigOptionResponse{}, nil
+}
+
 func (a *acpAgent) Prompt(ctx context.Context, params acp.PromptRequest) (acp.PromptResponse, error) {
 	a.mu.Lock()
 	s, ok := a.sessions[params.SessionId]
@@ -297,7 +301,7 @@ func (a *acpAgent) toolInterceptorForSession(sessionId acp.SessionId) toolInterc
 
 		resp, err := a.conn.RequestPermission(ctx, acp.RequestPermissionRequest{
 			SessionId: sessionId,
-			ToolCall: acp.RequestPermissionToolCall{
+			ToolCall: acp.ToolCallUpdate{
 				ToolCallId: toolId,
 				RawInput:   rawInput,
 			},
