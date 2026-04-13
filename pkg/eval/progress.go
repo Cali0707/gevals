@@ -23,6 +23,7 @@ const (
 	EventTaskVerifying  ProgressEventType = "task_verifying"
 	EventTaskAssertions ProgressEventType = "task_assertions"
 	EventTaskComplete   ProgressEventType = "task_complete"
+	EventTaskTimeout    ProgressEventType = "task_timeout"
 	EventTaskError      ProgressEventType = "task_error"
 	EventEvalComplete   ProgressEventType = "eval_complete"
 )

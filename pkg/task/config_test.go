@@ -37,6 +37,44 @@ func TestFromFile(t *testing.T) {
 		expected  *TaskConfig
 		expectErr bool
 	}{
+		"task with limits": {
+			file: "task-with-limits.yaml",
+			expected: &TaskConfig{
+				TypeMeta: util.TypeMeta{
+					APIVersion: "mcpchecker/v1alpha2",
+					Kind:       KindTask,
+				},
+				Metadata: TaskMetadata{
+					Name:       "task with limits",
+					Difficulty: DifficultyMedium,
+				},
+				Spec: &TaskSpec{
+					Limits: &util.Limits{
+						Timeout:        "15m",
+						CleanupTimeout: "2m",
+					},
+					Setup: []*steps.StepConfig{{
+						Config: map[string]json.RawMessage{
+							"script": json.RawMessage(`{"inline":"echo setup"}`),
+						},
+					}},
+					Verify: []*steps.StepConfig{{
+						Config: map[string]json.RawMessage{
+							"script": json.RawMessage(`{"inline":"echo verify"}`),
+						},
+					}},
+					Cleanup: []*steps.StepConfig{{
+						Config: map[string]json.RawMessage{
+							"script": json.RawMessage(`{"inline":"echo cleanup"}`),
+						},
+					}},
+					Prompt: &util.Step{
+						Inline: "Do something",
+					},
+				},
+				basePath: basePath,
+			},
+		},
 		"create pod inline no verify": {
 			file: "create-pod-inline-no-verify.yaml",
 			expected: &TaskConfig{

@@ -1,13 +1,20 @@
 package eval
 
 import (
+	"context"
 	"os"
 	"regexp"
 	"testing"
+	"time"
 
 	"github.com/mcpchecker/mcpchecker/pkg/agent"
+	"github.com/mcpchecker/mcpchecker/pkg/extension/client"
+	extSpec "github.com/mcpchecker/mcpchecker/pkg/extension"
 	"github.com/mcpchecker/mcpchecker/pkg/mcpclient"
+	"github.com/mcpchecker/mcpchecker/pkg/mcpproxy"
 	"github.com/mcpchecker/mcpchecker/pkg/task"
+	"github.com/mcpchecker/mcpchecker/pkg/tokens"
+	"github.com/mcpchecker/mcpchecker/pkg/util"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -377,58 +384,76 @@ func TestNewRunnerWithOptions(t *testing.T) {
 	}
 
 	tests := map[string]struct {
-		opts                     []RunnerOptions
-		expectedWorkers          int
-		expectedRuns             int
-		expectedRunsExplicitlySet bool
+		opts                          []RunnerOptions
+		expectedWorkers               int
+		expectedRuns                  int
+		expectedRunsExplicitlySet     bool
+		expectedDefaultTaskTimeout    string
+		expectedTaskTimeout           string
+		expectedDefaultCleanupTimeout string
+		expectedCleanupTimeout        string
 	}{
 		"no options - defaults to 1": {
-			opts:                     nil,
-			expectedWorkers:          1,
-			expectedRuns:             1,
+			opts:                      nil,
+			expectedWorkers:           1,
+			expectedRuns:              1,
 			expectedRunsExplicitlySet: false,
 		},
 		"empty options - defaults to 1": {
-			opts:                     []RunnerOptions{{}},
-			expectedWorkers:          1,
-			expectedRuns:             1,
+			opts:                      []RunnerOptions{{}},
+			expectedWorkers:           1,
+			expectedRuns:              1,
 			expectedRunsExplicitlySet: false,
 		},
 		"zero workers - defaults to 1": {
-			opts:                     []RunnerOptions{{ParallelWorkers: 0}},
-			expectedWorkers:          1,
-			expectedRuns:             1,
+			opts:                      []RunnerOptions{{ParallelWorkers: 0}},
+			expectedWorkers:           1,
+			expectedRuns:              1,
 			expectedRunsExplicitlySet: false,
 		},
 		"negative workers - defaults to 1": {
-			opts:                     []RunnerOptions{{ParallelWorkers: -5}},
-			expectedWorkers:          1,
-			expectedRuns:             1,
+			opts:                      []RunnerOptions{{ParallelWorkers: -5}},
+			expectedWorkers:           1,
+			expectedRuns:              1,
 			expectedRunsExplicitlySet: false,
 		},
 		"valid workers": {
-			opts:                     []RunnerOptions{{ParallelWorkers: 4}},
-			expectedWorkers:          4,
-			expectedRuns:             1,
+			opts:                      []RunnerOptions{{ParallelWorkers: 4}},
+			expectedWorkers:           4,
+			expectedRuns:              1,
 			expectedRunsExplicitlySet: false,
 		},
 		"valid runs": {
-			opts:                     []RunnerOptions{{Runs: 5}},
-			expectedWorkers:          1,
-			expectedRuns:             5,
+			opts:                      []RunnerOptions{{Runs: 5}},
+			expectedWorkers:           1,
+			expectedRuns:              5,
 			expectedRunsExplicitlySet: false,
 		},
 		"runs explicitly set": {
-			opts:                     []RunnerOptions{{Runs: 3, RunsExplicitlySet: true}},
-			expectedWorkers:          1,
-			expectedRuns:             3,
+			opts:                      []RunnerOptions{{Runs: 3, RunsExplicitlySet: true}},
+			expectedWorkers:           1,
+			expectedRuns:              3,
 			expectedRunsExplicitlySet: true,
 		},
 		"all options set": {
-			opts:                     []RunnerOptions{{ParallelWorkers: 4, Runs: 5, RunsExplicitlySet: true}},
-			expectedWorkers:          4,
-			expectedRuns:             5,
+			opts:                      []RunnerOptions{{ParallelWorkers: 4, Runs: 5, RunsExplicitlySet: true}},
+			expectedWorkers:           4,
+			expectedRuns:              5,
 			expectedRunsExplicitlySet: true,
+		},
+		"timeout options set": {
+			opts: []RunnerOptions{{
+				DefaultTaskTimeout:    "10m",
+				TaskTimeout:           "5m",
+				DefaultCleanupTimeout: "2m",
+				CleanupTimeout:        "1m",
+			}},
+			expectedWorkers:               1,
+			expectedRuns:                  1,
+			expectedDefaultTaskTimeout:    "10m",
+			expectedTaskTimeout:           "5m",
+			expectedDefaultCleanupTimeout: "2m",
+			expectedCleanupTimeout:        "1m",
 		},
 	}
 
@@ -441,6 +466,10 @@ func TestNewRunnerWithOptions(t *testing.T) {
 			assert.Equal(t, tc.expectedWorkers, r.parallelWorkers)
 			assert.Equal(t, tc.expectedRuns, r.runs)
 			assert.Equal(t, tc.expectedRunsExplicitlySet, r.runsExplicitlySet)
+			assert.Equal(t, tc.expectedDefaultTaskTimeout, r.defaultTaskTimeout)
+			assert.Equal(t, tc.expectedTaskTimeout, r.taskTimeout)
+			assert.Equal(t, tc.expectedDefaultCleanupTimeout, r.defaultCleanupTimeout)
+			assert.Equal(t, tc.expectedCleanupTimeout, r.cleanupTimeout)
 		})
 	}
 }
@@ -620,20 +649,20 @@ func TestCollectTaskConfigsDeduplication(t *testing.T) {
 				{Glob: "../task/testdata/*.yaml"},
 				{Glob: "../task/testdata/*.yaml"}, // same glob twice
 			},
-			expectedCount: 2, // 2 unique files, duplicates removed
+			expectedCount: 3, // 3 unique files, duplicates removed
 		},
 		"overlapping glob and explicit path": {
 			taskSets: []TaskSet{
 				{Glob: "../task/testdata/*.yaml"},
 				{Path: "../task/testdata/create-pod-inline.yaml"}, // explicit path that matches glob
 			},
-			expectedCount: 2, // should deduplicate the overlapping one
+			expectedCount: 3, // should deduplicate the overlapping one
 		},
 		"single task set": {
 			taskSets: []TaskSet{
 				{Glob: "../task/testdata/*.yaml"},
 			},
-			expectedCount: 2, // 2 task files in testdata
+			expectedCount: 3, // 3 task files in testdata
 		},
 		"triple duplicate same path": {
 			taskSets: []TaskSet{
@@ -736,4 +765,385 @@ func TestCollectTaskConfigsNilAssertions(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, configs, 1)
 	assert.Len(t, configs[0].assertions, 0, "nil assertions should not be added to slice")
+}
+
+func TestResolveTaskTimeout(t *testing.T) {
+	tests := map[string]struct {
+		taskTimeout        string
+		specLimits         *util.Limits
+		defaultTaskTimeout string
+		configLimits       *util.Limits
+		expectedDuration   time.Duration
+		expectedSet        bool
+		expectErr          bool
+	}{
+		"all empty - no timeout": {
+			expectedDuration: 0,
+			expectedSet:      false,
+		},
+		"eval config only": {
+			configLimits:     &util.Limits{Timeout: "20m"},
+			expectedDuration: 20 * time.Minute,
+			expectedSet:      true,
+		},
+		"CLI default only": {
+			defaultTaskTimeout: "10m",
+			expectedDuration:   10 * time.Minute,
+			expectedSet:        true,
+		},
+		"CLI default overrides eval config": {
+			defaultTaskTimeout: "10m",
+			configLimits:       &util.Limits{Timeout: "20m"},
+			expectedDuration:   10 * time.Minute,
+			expectedSet:        true,
+		},
+		"per-task only": {
+			specLimits:       &util.Limits{Timeout: "5m"},
+			expectedDuration: 5 * time.Minute,
+			expectedSet:      true,
+		},
+		"per-task overrides CLI default": {
+			specLimits:         &util.Limits{Timeout: "5m"},
+			defaultTaskTimeout: "10m",
+			configLimits:       &util.Limits{Timeout: "20m"},
+			expectedDuration:   5 * time.Minute,
+			expectedSet:        true,
+		},
+		"per-task overrides eval config": {
+			specLimits:       &util.Limits{Timeout: "5m"},
+			configLimits:     &util.Limits{Timeout: "20m"},
+			expectedDuration: 5 * time.Minute,
+			expectedSet:      true,
+		},
+		"CLI hard override wins over all": {
+			taskTimeout:        "3m",
+			specLimits:         &util.Limits{Timeout: "5m"},
+			defaultTaskTimeout: "10m",
+			configLimits:       &util.Limits{Timeout: "20m"},
+			expectedDuration:   3 * time.Minute,
+			expectedSet:        true,
+		},
+		"CLI hard override with no others set": {
+			taskTimeout:      "3m",
+			expectedDuration: 3 * time.Minute,
+			expectedSet:      true,
+		},
+		"invalid CLI hard override": {
+			taskTimeout: "abc",
+			expectErr:   true,
+		},
+		"invalid per-task timeout": {
+			specLimits: &util.Limits{Timeout: "abc"},
+			expectErr:  true,
+		},
+		"invalid CLI default": {
+			defaultTaskTimeout: "abc",
+			expectErr:          true,
+		},
+		"invalid eval config": {
+			configLimits: &util.Limits{Timeout: "abc"},
+			expectErr:    true,
+		},
+		"per-task with empty timeout falls through to CLI default": {
+			specLimits:         &util.Limits{CleanupTimeout: "2m"}, // has limits but no timeout
+			defaultTaskTimeout: "10m",
+			expectedDuration:   10 * time.Minute,
+			expectedSet:        true,
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			runner := &evalRunner{
+				taskTimeout:        tc.taskTimeout,
+				defaultTaskTimeout: tc.defaultTaskTimeout,
+				spec: &EvalSpec{
+					Config: EvalConfig{
+						DefaultTaskLimits: tc.configLimits,
+					},
+				},
+			}
+			taskCfg := taskConfig{
+				spec: &task.TaskConfig{
+					Spec: &task.TaskSpec{
+						Limits: tc.specLimits,
+					},
+				},
+			}
+
+			d, ok, err := runner.resolveTaskTimeout(taskCfg)
+			if tc.expectErr {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tc.expectedDuration, d)
+			assert.Equal(t, tc.expectedSet, ok)
+		})
+	}
+}
+
+func TestResolveCleanupTimeout(t *testing.T) {
+	tests := map[string]struct {
+		cleanupTimeout        string
+		specLimits            *util.Limits
+		defaultCleanupTimeout string
+		configLimits          *util.Limits
+		expectedDuration      time.Duration
+		expectedSet           bool
+		expectErr             bool
+	}{
+		"all empty - no timeout": {
+			expectedDuration: 0,
+			expectedSet:      false,
+		},
+		"eval config only": {
+			configLimits:     &util.Limits{CleanupTimeout: "5m"},
+			expectedDuration: 5 * time.Minute,
+			expectedSet:      true,
+		},
+		"CLI default only": {
+			defaultCleanupTimeout: "3m",
+			expectedDuration:      3 * time.Minute,
+			expectedSet:           true,
+		},
+		"CLI default overrides eval config": {
+			defaultCleanupTimeout: "3m",
+			configLimits:          &util.Limits{CleanupTimeout: "5m"},
+			expectedDuration:      3 * time.Minute,
+			expectedSet:           true,
+		},
+		"per-task only": {
+			specLimits:       &util.Limits{CleanupTimeout: "2m"},
+			expectedDuration: 2 * time.Minute,
+			expectedSet:      true,
+		},
+		"per-task overrides CLI default": {
+			specLimits:            &util.Limits{CleanupTimeout: "2m"},
+			defaultCleanupTimeout: "3m",
+			configLimits:          &util.Limits{CleanupTimeout: "5m"},
+			expectedDuration:      2 * time.Minute,
+			expectedSet:           true,
+		},
+		"CLI hard override wins over all": {
+			cleanupTimeout:        "1m",
+			specLimits:            &util.Limits{CleanupTimeout: "2m"},
+			defaultCleanupTimeout: "3m",
+			configLimits:          &util.Limits{CleanupTimeout: "5m"},
+			expectedDuration:      1 * time.Minute,
+			expectedSet:           true,
+		},
+		"CLI hard override with no others set": {
+			cleanupTimeout:   "1m",
+			expectedDuration: 1 * time.Minute,
+			expectedSet:      true,
+		},
+		"invalid CLI hard override": {
+			cleanupTimeout: "abc",
+			expectErr:      true,
+		},
+		"invalid per-task cleanup timeout": {
+			specLimits: &util.Limits{CleanupTimeout: "abc"},
+			expectErr:  true,
+		},
+		"invalid CLI default": {
+			defaultCleanupTimeout: "abc",
+			expectErr:             true,
+		},
+		"invalid eval config": {
+			configLimits: &util.Limits{CleanupTimeout: "abc"},
+			expectErr:    true,
+		},
+		"per-task with empty cleanupTimeout falls through to CLI default": {
+			specLimits:            &util.Limits{Timeout: "10m"}, // has limits but no cleanupTimeout
+			defaultCleanupTimeout: "3m",
+			expectedDuration:      3 * time.Minute,
+			expectedSet:           true,
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			runner := &evalRunner{
+				cleanupTimeout:        tc.cleanupTimeout,
+				defaultCleanupTimeout: tc.defaultCleanupTimeout,
+				spec: &EvalSpec{
+					Config: EvalConfig{
+						DefaultTaskLimits: tc.configLimits,
+					},
+				},
+			}
+			taskCfg := taskConfig{
+				spec: &task.TaskConfig{
+					Spec: &task.TaskSpec{
+						Limits: tc.specLimits,
+					},
+				},
+			}
+
+			d, ok, err := runner.resolveCleanupTimeout(taskCfg)
+			if tc.expectErr {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tc.expectedDuration, d)
+			assert.Equal(t, tc.expectedSet, ok)
+		})
+	}
+}
+
+// --- Test fakes for integration tests ---
+
+// fakeAgentResult implements agent.AgentResult
+type fakeAgentResult struct{}
+
+func (f *fakeAgentResult) GetOutput() []agent.OutputStep {
+	return []agent.OutputStep{{Type: "message", Content: "done"}}
+}
+func (f *fakeAgentResult) GetToolCalls() []agent.ToolCallSummary { return nil }
+func (f *fakeAgentResult) GetRawUpdates() any                    { return nil }
+func (f *fakeAgentResult) GetTokenEstimate() tokens.Estimate     { return tokens.Estimate{} }
+
+// fakeAgentRunner implements agent.Runner. RunTask blocks until context is cancelled or delay elapses.
+type fakeAgentRunner struct {
+	delay time.Duration
+}
+
+func (f *fakeAgentRunner) RunTask(ctx context.Context, prompt string) (agent.AgentResult, error) {
+	select {
+	case <-time.After(f.delay):
+		return &fakeAgentResult{}, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
+func (f *fakeAgentRunner) WithMcpServerInfo(_ mcpproxy.ServerManager) agent.Runner {
+	return f
+}
+
+func (f *fakeAgentRunner) AgentName() string {
+	return "fake-agent"
+}
+
+// fakeMcpManager implements mcpclient.Manager
+type fakeMcpManager struct{}
+
+func (f *fakeMcpManager) Get(_ string) (*mcpclient.Client, bool) { return nil, false }
+func (f *fakeMcpManager) GetAll() map[string]*mcpclient.Client   { return map[string]*mcpclient.Client{} }
+func (f *fakeMcpManager) Close(_ context.Context) error          { return nil }
+
+// fakeExtensionManager implements client.ExtensionManager
+type fakeExtensionManager struct{}
+
+func (f *fakeExtensionManager) Register(_ string, _ *extSpec.ExtensionSpec) error { return nil }
+func (f *fakeExtensionManager) Get(_ context.Context, _ string) (client.Client, error) {
+	return nil, nil
+}
+func (f *fakeExtensionManager) Has(_ string) bool              { return false }
+func (f *fakeExtensionManager) ShutdownAll(_ context.Context) error { return nil }
+
+// setupTestContext creates a context with fake MCP and extension managers injected
+func setupTestContext() context.Context {
+	ctx := context.Background()
+	ctx = mcpclient.ManagerToContext(ctx, &fakeMcpManager{})
+	ctx = client.ManagerToContext(ctx, &fakeExtensionManager{})
+	return ctx
+}
+
+func TestRunTaskTimeout(t *testing.T) {
+	tests := map[string]struct {
+		taskTimeout   string
+		agentDelay    time.Duration
+		expectTimeout bool
+	}{
+		"task completes within timeout": {
+			taskTimeout:   "5s",
+			agentDelay:    10 * time.Millisecond,
+			expectTimeout: false,
+		},
+		"task exceeds timeout": {
+			taskTimeout:   "100ms",
+			agentDelay:    10 * time.Second,
+			expectTimeout: true,
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			ctx := setupTestContext()
+
+			runner := &evalRunner{
+				spec: &EvalSpec{
+					Config: EvalConfig{},
+				},
+				taskTimeout:      tc.taskTimeout,
+				progressCallback: NoopProgressCallback,
+			}
+
+			taskCfg := taskConfig{
+				path: "test.yaml",
+				spec: &task.TaskConfig{
+					Metadata: task.TaskMetadata{
+						Name: "timeout-test",
+					},
+					Spec: &task.TaskSpec{
+						Prompt: &util.Step{Inline: "do something"},
+					},
+				},
+			}
+
+			agentRunner := &fakeAgentRunner{delay: tc.agentDelay}
+
+			result, err := runner.runTask(ctx, agentRunner, taskCfg)
+			require.NoError(t, err)
+			require.NotNil(t, result)
+
+			assert.Equal(t, tc.expectTimeout, result.TimedOut)
+			if tc.expectTimeout {
+				assert.False(t, result.TaskPassed)
+				assert.Contains(t, result.TaskError, "task exceeded timeout")
+			} else {
+				assert.True(t, result.TaskPassed)
+			}
+		})
+	}
+}
+
+func TestRunTaskCleanupRunsAfterTimeout(t *testing.T) {
+	ctx := setupTestContext()
+
+	runner := &evalRunner{
+		spec: &EvalSpec{
+			Config: EvalConfig{},
+		},
+		taskTimeout:      "100ms",
+		progressCallback: NoopProgressCallback,
+	}
+
+	taskCfg := taskConfig{
+		path: "test.yaml",
+		spec: &task.TaskConfig{
+			Metadata: task.TaskMetadata{
+				Name: "cleanup-after-timeout",
+			},
+			Spec: &task.TaskSpec{
+				Prompt: &util.Step{Inline: "do something"},
+			},
+		},
+	}
+
+	agentRunner := &fakeAgentRunner{delay: 10 * time.Second}
+
+	result, err := runner.runTask(ctx, agentRunner, taskCfg)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+
+	assert.True(t, result.TimedOut)
+	assert.False(t, result.TaskPassed)
+
+	// Cleanup should have run (cleanup output is set even with no cleanup steps)
+	assert.NotNil(t, result.CleanupOutput, "cleanup should run even after timeout")
+	assert.True(t, result.CleanupOutput.Success, "cleanup with no steps should succeed")
 }

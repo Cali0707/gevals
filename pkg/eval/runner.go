@@ -27,6 +27,7 @@ type EvalResult struct {
 	TaskPassed          bool                      `json:"taskPassed"`
 	TaskOutput          string                    `json:"taskOutput"`
 	TaskError           string                    `json:"taskError,omitempty"`
+	TimedOut            bool                      `json:"timedOut,omitempty"`
 	TaskJudgeReason     string                    `json:"taskJudgeReason,omitempty"`
 	TaskJudgeError      string                    `json:"taskJudgeError,omitempty"`
 	AgentExecutionError bool                      `json:"agentExecutionError,omitempty"` // True if agent failed to execute
@@ -62,6 +63,12 @@ type RunnerOptions struct {
 	ParallelWorkers   int
 	Runs              int  // Number of times to run each task (default: 1)
 	RunsExplicitlySet bool // True if Runs was explicitly set via CLI (overrides task-level runs)
+
+	// Timeout overrides (CLI flags)
+	DefaultTaskTimeout    string // Overrides eval config defaultTaskLimits.timeout for tasks without their own
+	TaskTimeout           string // Hard override for ALL task timeouts
+	DefaultCleanupTimeout string // Overrides eval config defaultTaskLimits.cleanupTimeout for tasks without their own
+	CleanupTimeout        string // Hard override for ALL cleanup timeouts
 }
 
 type evalRunner struct {
@@ -70,6 +77,12 @@ type evalRunner struct {
 	parallelWorkers   int
 	runs              int
 	runsExplicitlySet bool
+
+	// Timeout overrides from CLI
+	defaultTaskTimeout    string
+	taskTimeout           string
+	defaultCleanupTimeout string
+	cleanupTimeout        string
 }
 
 var _ EvalRunner = &evalRunner{}
@@ -99,13 +112,22 @@ func NewRunner(spec *EvalSpec, opts ...RunnerOptions) (EvalRunner, error) {
 		runsExplicitlySet = opts[0].RunsExplicitlySet
 	}
 
-	return &evalRunner{
+	r := &evalRunner{
 		spec:              spec,
 		progressCallback:  NoopProgressCallback,
 		parallelWorkers:   workers,
 		runs:              runs,
 		runsExplicitlySet: runsExplicitlySet,
-	}, nil
+	}
+
+	if len(opts) > 0 {
+		r.defaultTaskTimeout = opts[0].DefaultTaskTimeout
+		r.taskTimeout = opts[0].TaskTimeout
+		r.defaultCleanupTimeout = opts[0].DefaultCleanupTimeout
+		r.cleanupTimeout = opts[0].CleanupTimeout
+	}
+
+	return r, nil
 }
 
 func (r *evalRunner) loadMcpConfig() (*mcpclient.MCPConfig, error) {
@@ -383,6 +405,95 @@ func (r *evalRunner) getRunsForTask(tc taskConfig) int {
 	return 1
 }
 
+// resolveTaskTimeout determines the effective task timeout for a specific task.
+// Precedence (highest to lowest):
+//  1. CLI --task-timeout (hard override)
+//  2. task spec.limits.timeout (per-task)
+//  3. CLI --default-task-timeout
+//  4. eval config.defaultTaskLimits.timeout
+//  5. no timeout (returns 0, false, nil)
+func (r *evalRunner) resolveTaskTimeout(tc taskConfig) (time.Duration, bool, error) {
+	if r.taskTimeout != "" {
+		d, err := time.ParseDuration(r.taskTimeout)
+		if err != nil {
+			return 0, false, fmt.Errorf("invalid --task-timeout %q: %w", r.taskTimeout, err)
+		}
+		return d, true, nil
+	}
+
+	if tc.spec.Spec != nil && tc.spec.Spec.Limits != nil {
+		d, ok, err := tc.spec.Spec.Limits.GetTimeout()
+		if err != nil {
+			return 0, false, err
+		}
+		if ok {
+			return d, true, nil
+		}
+	}
+
+	if r.defaultTaskTimeout != "" {
+		d, err := time.ParseDuration(r.defaultTaskTimeout)
+		if err != nil {
+			return 0, false, fmt.Errorf("invalid --default-task-timeout %q: %w", r.defaultTaskTimeout, err)
+		}
+		return d, true, nil
+	}
+
+	if r.spec.Config.DefaultTaskLimits != nil {
+		d, ok, err := r.spec.Config.DefaultTaskLimits.GetTimeout()
+		if err != nil {
+			return 0, false, err
+		}
+		if ok {
+			return d, true, nil
+		}
+	}
+
+	return 0, false, nil
+}
+
+// resolveCleanupTimeout determines the effective cleanup timeout for a specific task.
+// Follows the same precedence pattern as resolveTaskTimeout.
+func (r *evalRunner) resolveCleanupTimeout(tc taskConfig) (time.Duration, bool, error) {
+	if r.cleanupTimeout != "" {
+		d, err := time.ParseDuration(r.cleanupTimeout)
+		if err != nil {
+			return 0, false, fmt.Errorf("invalid --cleanup-timeout %q: %w", r.cleanupTimeout, err)
+		}
+		return d, true, nil
+	}
+
+	if tc.spec.Spec != nil && tc.spec.Spec.Limits != nil {
+		d, ok, err := tc.spec.Spec.Limits.GetCleanupTimeout()
+		if err != nil {
+			return 0, false, err
+		}
+		if ok {
+			return d, true, nil
+		}
+	}
+
+	if r.defaultCleanupTimeout != "" {
+		d, err := time.ParseDuration(r.defaultCleanupTimeout)
+		if err != nil {
+			return 0, false, fmt.Errorf("invalid --default-cleanup-timeout %q: %w", r.defaultCleanupTimeout, err)
+		}
+		return d, true, nil
+	}
+
+	if r.spec.Config.DefaultTaskLimits != nil {
+		d, ok, err := r.spec.Config.DefaultTaskLimits.GetCleanupTimeout()
+		if err != nil {
+			return 0, false, err
+		}
+		if ok {
+			return d, true, nil
+		}
+	}
+
+	return 0, false, nil
+}
+
 // executeTask runs a task for the configured number of runs.
 // Returns a slice of results, one per run.
 func (r *evalRunner) executeTask(
@@ -484,6 +595,21 @@ func (r *evalRunner) runTask(
 		Parallel:   tc.spec.Metadata.Parallel,
 	}
 
+	// Resolve timeouts
+	taskTimeout, hasTaskTimeout, err := r.resolveTaskTimeout(tc)
+	if err != nil {
+		result.TaskPassed = false
+		result.TaskError = err.Error()
+		return result, nil
+	}
+
+	cleanupTimeout, hasCleanupTimeout, err := r.resolveCleanupTimeout(tc)
+	if err != nil {
+		result.TaskPassed = false
+		result.TaskError = err.Error()
+		return result, nil
+	}
+
 	r.progressCallback(ProgressEvent{
 		Type:    EventTaskStart,
 		Message: fmt.Sprintf("Starting task: %s", tc.spec.Metadata.Name),
@@ -496,21 +622,66 @@ func (r *evalRunner) runTask(
 		Task:    result,
 	})
 
-	taskRunner, manager, cleanup, err := r.setupTaskResources(ctx, tc, result)
+	// Create a task-scoped context with timeout if configured
+	taskCtx := ctx
+	var taskCancel context.CancelFunc
+	if hasTaskTimeout {
+		taskCtx, taskCancel = context.WithTimeout(ctx, taskTimeout)
+		defer taskCancel()
+	}
+
+	taskRunner, manager, cleanup, err := r.setupTaskResources(taskCtx, tc, result)
 	if err != nil {
 		result.TaskPassed = false
-		result.TaskError = err.Error()
-		r.progressCallback(ProgressEvent{
-			Type:    EventTaskError,
-			Message: fmt.Sprintf("Task setup failed: %s", tc.spec.Metadata.Name),
-			Task:    result,
-		})
+		// Check if the error was caused by timeout
+		if hasTaskTimeout && taskCtx.Err() == context.DeadlineExceeded {
+			result.TimedOut = true
+			result.TaskError = fmt.Sprintf("task exceeded timeout of %s during setup", taskTimeout)
+			r.progressCallback(ProgressEvent{
+				Type:    EventTaskTimeout,
+				Message: fmt.Sprintf("Task %s timed out after %s", tc.spec.Metadata.Name, taskTimeout),
+				Task:    result,
+			})
+		} else {
+			result.TaskError = err.Error()
+			r.progressCallback(ProgressEvent{
+				Type:    EventTaskError,
+				Message: fmt.Sprintf("Task setup failed: %s", tc.spec.Metadata.Name),
+				Task:    result,
+			})
+		}
 		return result, nil
 	}
-	defer cleanup()
 
-	r.executeTaskSteps(ctx, taskRunner, agentRunner, manager, result)
+	// Defer cleanup with its own timeout context, independent of task timeout
+	defer func() {
+		var cleanupCtx context.Context
+		var cleanupCancel context.CancelFunc
+		if hasCleanupTimeout {
+			cleanupCtx, cleanupCancel = context.WithTimeout(context.Background(), cleanupTimeout)
+		} else {
+			cleanupCtx = context.Background()
+			cleanupCancel = func() {}
+		}
+		defer cleanupCancel()
+		cleanup(cleanupCtx)
+	}()
 
+	r.executeTaskSteps(taskCtx, taskRunner, agentRunner, manager, result)
+
+	// Check if executeTaskSteps was terminated by timeout
+	if hasTaskTimeout && taskCtx.Err() == context.DeadlineExceeded && !result.TimedOut {
+		result.TimedOut = true
+		result.TaskPassed = false
+		result.TaskError = fmt.Sprintf("task exceeded timeout of %s", taskTimeout)
+		r.progressCallback(ProgressEvent{
+			Type:    EventTaskTimeout,
+			Message: fmt.Sprintf("Task %s timed out after %s", tc.spec.Metadata.Name, taskTimeout),
+			Task:    result,
+		})
+	}
+
+	// Assertions and token computation use the original ctx, not taskCtx
 	r.progressCallback(ProgressEvent{
 		Type:    EventTaskAssertions,
 		Message: fmt.Sprintf("Evaluating assertions for task: %s", tc.spec.Metadata.Name),
@@ -563,7 +734,7 @@ func (r *evalRunner) setupTaskResources(
 	ctx context.Context,
 	tc taskConfig,
 	result *EvalResult,
-) (task.TaskRunner, mcpproxy.ServerManager, func(), error) {
+) (task.TaskRunner, mcpproxy.ServerManager, func(context.Context), error) {
 	mcpManager, ok := mcpclient.ManagerFromContext(ctx)
 	if !ok {
 		return nil, nil, nil, fmt.Errorf("mcp manager not found in context")
@@ -590,8 +761,8 @@ func (r *evalRunner) setupTaskResources(
 		return nil, nil, nil, fmt.Errorf("failed to setup task: %w", err)
 	}
 
-	cleanup := func() {
-		cleanupOutput, _ := taskRunner.Cleanup(ctx)
+	cleanup := func(cleanupCtx context.Context) {
+		cleanupOutput, _ := taskRunner.Cleanup(cleanupCtx)
 		result.CleanupOutput = cleanupOutput
 		manager.Close()
 	}

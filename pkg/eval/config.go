@@ -46,6 +46,10 @@ type EvalConfig struct {
 	McpConfigFile string                       `json:"mcpConfigFile"`
 	LLMJudge      *llmjudge.LLMJudgeEvalConfig `json:"llmJudge"`
 
+	// DefaultTaskLimits sets default timeout limits for all tasks in this eval.
+	// Individual tasks can override these via spec.limits.
+	DefaultTaskLimits *util.Limits `json:"defaultTaskLimits,omitempty"`
+
 	// Advanced mode: different assertion sets
 	TaskSets []TaskSet `json:"taskSets,omitempty"`
 }
