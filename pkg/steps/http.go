@@ -75,6 +75,7 @@ func NewHttpStep(cfg *HttpStepConfig) (*HttpStep, error) {
 
 	sources := map[string]template.SourceFactory{
 		"random": template.NewSourceFactory("random"),
+		"agent":  template.NewSourceFactory("agent"),
 	}
 	parseOpts := template.TemplateParserOptions{Sources: sources}
 
@@ -138,6 +139,13 @@ func (s *HttpStep) Execute(ctx context.Context, input *StepInput) (*StepOutput, 
 		for _, h := range s.Headers {
 			h.SetSourceResolver("random", input.Random)
 		}
+	}
+
+	agentResolver := NewAgentResolver(input.Agent)
+	s.URL.SetSourceResolver("agent", agentResolver)
+	s.Method.SetSourceResolver("agent", agentResolver)
+	for _, h := range s.Headers {
+		h.SetSourceResolver("agent", agentResolver)
 	}
 
 	for k, v := range input.Env {
