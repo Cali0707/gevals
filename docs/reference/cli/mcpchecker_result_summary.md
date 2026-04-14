@@ -1,4 +1,4 @@
-## mcpchecker summary
+## mcpchecker result summary
 
 Show a compact summary of evaluation results
 
@@ -12,7 +12,7 @@ Supports multiple output formats:
   - --github-output: GitHub Actions format (key=value)
 
 ```
-mcpchecker summary <results-file> [flags]
+mcpchecker result summary <results-file> [flags]
 ```
 
 ### Options
@@ -26,5 +26,5 @@ mcpchecker summary <results-file> [flags]
 
 ### SEE ALSO
 
-* [mcpchecker](mcpchecker.md)	 - MCP evaluation framework
+* [mcpchecker result](mcpchecker_result.md)	 - Commands for inspecting and analyzing evaluation result files
 

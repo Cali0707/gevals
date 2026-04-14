@@ -37,11 +37,11 @@ func NewViewCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "view <results-file>",
 		Short: "Pretty-print evaluation results from a JSON file",
-		Long: `Render the JSON output produced by "mcpchecker run" in a human-friendly format.
+		Long: `Render the JSON output produced by "mcpchecker check" in a human-friendly format.
 
 Examples:
-  mcpchecker view mcpchecker-netedge-selector-mismatch-out.json
-  mcpchecker view --task netedge-selector-mismatch --max-events 15 results.json`,
+  mcpchecker result view mcpchecker-netedge-selector-mismatch-out.json
+  mcpchecker result view --task netedge-selector-mismatch --max-events 15 results.json`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			evalResults, err := results.Load(args[0])

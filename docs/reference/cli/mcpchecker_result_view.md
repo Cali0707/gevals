@@ -1,17 +1,17 @@
-## mcpchecker view
+## mcpchecker result view
 
 Pretty-print evaluation results from a JSON file
 
 ### Synopsis
 
-Render the JSON output produced by "mcpchecker run" in a human-friendly format.
+Render the JSON output produced by "mcpchecker check" in a human-friendly format.
 
 Examples:
-  mcpchecker view mcpchecker-netedge-selector-mismatch-out.json
-  mcpchecker view --task netedge-selector-mismatch --max-events 15 results.json
+  mcpchecker result view mcpchecker-netedge-selector-mismatch-out.json
+  mcpchecker result view --task netedge-selector-mismatch --max-events 15 results.json
 
 ```
-mcpchecker view <results-file> [flags]
+mcpchecker result view <results-file> [flags]
 ```
 
 ### Options
@@ -27,5 +27,5 @@ mcpchecker view <results-file> [flags]
 
 ### SEE ALSO
 
-* [mcpchecker](mcpchecker.md)	 - MCP evaluation framework
+* [mcpchecker result](mcpchecker_result.md)	 - Commands for inspecting and analyzing evaluation result files
 

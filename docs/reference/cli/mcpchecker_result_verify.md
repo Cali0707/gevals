@@ -1,4 +1,4 @@
-## mcpchecker verify
+## mcpchecker result verify
 
 Verify evaluation results meet thresholds
 
@@ -8,10 +8,10 @@ Verify that evaluation results meet minimum pass rate thresholds.
 Useful as a CI gate to enforce quality standards.
 
 Exits with code 0 if all thresholds are met, code 1 otherwise.
-Use 'mcpchecker summary' to view detailed results.
+Use 'mcpchecker result summary' to view detailed results.
 
 ```
-mcpchecker verify <results-file> [flags]
+mcpchecker result verify <results-file> [flags]
 ```
 
 ### Options
@@ -24,5 +24,5 @@ mcpchecker verify <results-file> [flags]
 
 ### SEE ALSO
 
-* [mcpchecker](mcpchecker.md)	 - MCP evaluation framework
+* [mcpchecker result](mcpchecker_result.md)	 - Commands for inspecting and analyzing evaluation result files
 

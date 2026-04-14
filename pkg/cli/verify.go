@@ -21,7 +21,7 @@ func NewVerifyCmd() *cobra.Command {
 Useful as a CI gate to enforce quality standards.
 
 Exits with code 0 if all thresholds are met, code 1 otherwise.
-Use 'mcpchecker summary' to view detailed results.`,
+Use 'mcpchecker result summary' to view detailed results.`,
 		Args:          cobra.ExactArgs(1),
 		SilenceUsage:  true,
 		SilenceErrors: true,

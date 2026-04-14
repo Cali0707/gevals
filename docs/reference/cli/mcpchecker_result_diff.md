@@ -1,4 +1,4 @@
-## mcpchecker diff
+## mcpchecker result diff
 
 Compare two evaluation results
 
@@ -10,11 +10,11 @@ Shows regressions, improvements, new tasks, removed tasks, and overall pass rate
 Useful for posting on pull requests to show impact of changes.
 
 Example:
-  mcpchecker diff --base results-main.json --current results-pr.json
-  mcpchecker diff --base results-main.json --current results-pr.json --output markdown
+  mcpchecker result diff --base results-main.json --current results-pr.json
+  mcpchecker result diff --base results-main.json --current results-pr.json --output markdown
 
 ```
-mcpchecker diff --base <results-file> --current <results-file> [flags]
+mcpchecker result diff --base <results-file> --current <results-file> [flags]
 ```
 
 ### Options
@@ -28,5 +28,5 @@ mcpchecker diff --base <results-file> --current <results-file> [flags]
 
 ### SEE ALSO
 
-* [mcpchecker](mcpchecker.md)	 - MCP evaluation framework
+* [mcpchecker result](mcpchecker_result.md)	 - Commands for inspecting and analyzing evaluation result files
 
