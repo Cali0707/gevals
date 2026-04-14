@@ -460,7 +460,7 @@ func TestHttpStep_Execute(t *testing.T) {
 				Body:   &HttpBody{Raw: ptr.To("")},
 				Expect: &HttpExpect{Status: 200},
 			},
-			input: &StepInput{Env: map[string]string{}},
+			input: &StepInput{},
 			expected: &StepOutput{
 				Type:    "http",
 				Success: true,
@@ -485,7 +485,7 @@ func TestHttpStep_Execute(t *testing.T) {
 				Body:   &HttpBody{JSON: map[string]any{"name": "test"}},
 				Expect: &HttpExpect{Status: 201},
 			},
-			input: &StepInput{Env: map[string]string{}},
+			input: &StepInput{},
 			expected: &StepOutput{
 				Type:    "http",
 				Success: true,
@@ -502,7 +502,7 @@ func TestHttpStep_Execute(t *testing.T) {
 				Body:   &HttpBody{Raw: ptr.To("")},
 				Expect: &HttpExpect{Status: 200},
 			},
-			input: &StepInput{Env: map[string]string{}},
+			input: &StepInput{},
 			expected: &StepOutput{
 				Type:    "http",
 				Success: false,

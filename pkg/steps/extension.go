@@ -86,7 +86,6 @@ func (r *extensionStep) Execute(ctx context.Context, input *StepInput) (*StepOut
 		Args:      r.args,
 		Context: extprotocol.ExecuteContext{
 			Workdir: input.Workdir,
-			Env:     input.Env,
 		},
 	}
 

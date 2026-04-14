@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"regexp"
 	"strings"
 	"time"
@@ -147,18 +146,6 @@ func (s *HttpStep) Execute(ctx context.Context, input *StepInput) (*StepOutput, 
 	for _, h := range s.Headers {
 		h.SetSourceResolver("agent", agentResolver)
 	}
-
-	for k, v := range input.Env {
-		err := os.Setenv(k, v)
-		if err != nil {
-			return nil, fmt.Errorf("failed to set env var '%s' to value '%s': %w", k, v, err)
-		}
-	}
-	defer func() {
-		for k := range input.Env {
-			_ = os.Unsetenv(k)
-		}
-	}()
 
 	method, err := s.Method.GetResult()
 	if err != nil {

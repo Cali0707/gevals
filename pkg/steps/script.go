@@ -9,20 +9,24 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/genmcp/gen-mcp/pkg/template"
 )
 
 // TODO: Add template support for File and Inline fields once we figure out
 // how to handle escaping conflicts between template syntax and shell escapes.
 type ScriptStepConfig struct {
-	File            string `json:"file,omitempty"`
-	Inline          string `json:"inline,omitempty"`
-	Timeout         string `json:"timeout,omitempty"`
-	ContinueOnError bool   `json:"continueOnError,omitempty"`
+	File            string            `json:"file,omitempty"`
+	Inline          string            `json:"inline,omitempty"`
+	Env             map[string]string `json:"env,omitempty"`
+	Timeout         string            `json:"timeout,omitempty"`
+	ContinueOnError bool              `json:"continueOnError,omitempty"`
 }
 
 type ScriptStep struct {
 	File            string
 	Inline          string
+	Env             map[string]*template.TemplateBuilder
 	Timeout         time.Duration
 	ContinueOnError bool
 }
@@ -45,9 +49,30 @@ func NewScriptStep(cfg *ScriptStepConfig) (*ScriptStep, error) {
 		return nil, err
 	}
 
+	sources := map[string]template.SourceFactory{
+		"agent":  template.NewSourceFactory("agent"),
+		"steps":  template.NewSourceFactory("steps"),
+		"random": template.NewSourceFactory("random"),
+	}
+	parseOpts := template.TemplateParserOptions{Sources: sources}
+
+	env := make(map[string]*template.TemplateBuilder, len(cfg.Env))
+	for k, v := range cfg.Env {
+		parsed, err := template.ParseTemplate(v, parseOpts)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse env var %q template: %w", k, err)
+		}
+		builder, err := template.NewTemplateBuilder(parsed, false)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create template builder for env var %q: %w", k, err)
+		}
+		env[k] = builder
+	}
+
 	step := &ScriptStep{
 		File:            cfg.File,
 		Inline:          cfg.Inline,
+		Env:             env,
 		ContinueOnError: cfg.ContinueOnError,
 	}
 
@@ -65,18 +90,6 @@ func NewScriptStep(cfg *ScriptStepConfig) (*ScriptStep, error) {
 }
 
 func (s *ScriptStep) Execute(ctx context.Context, input *StepInput) (*StepOutput, error) {
-	for k, v := range input.Env {
-		err := os.Setenv(k, v)
-		if err != nil {
-			return nil, fmt.Errorf("failed to set env var '%s' to value '%s': %w", k, v, err)
-		}
-	}
-	defer func() {
-		for k := range input.Env {
-			_ = os.Unsetenv(k)
-		}
-	}()
-
 	ctx, cancel := context.WithTimeout(ctx, s.Timeout)
 	defer cancel()
 
@@ -91,6 +104,13 @@ func (s *ScriptStep) Execute(ctx context.Context, input *StepInput) (*StepOutput
 	if err != nil {
 		return s.handleError(err)
 	}
+
+	resolvedEnv, err := s.resolveEnv(input)
+	if err != nil {
+		return s.handleError(fmt.Errorf("failed to resolve env templates: %w", err))
+	}
+
+	applyEnv(cmd, resolvedEnv)
 
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -203,6 +223,58 @@ func (cfg *ScriptStepConfig) Validate() error {
 	}
 
 	return nil
+}
+
+// resolveEnv resolves template variables in env values using the step input's
+// sources (step outputs, random values, and environment variables).
+func (s *ScriptStep) resolveEnv(input *StepInput) (map[string]string, error) {
+	if len(s.Env) == 0 {
+		return nil, nil
+	}
+
+	stepOutputs := input.StepOutputs
+	if stepOutputs == nil {
+		stepOutputs = make(map[string]map[string]string)
+	}
+
+	resolver := NewStepOutputResolver(stepOutputs)
+	agentResolver := NewAgentResolver(input.Agent)
+
+	resolved := make(map[string]string, len(s.Env))
+	for k, builder := range s.Env {
+		builder.SetSourceResolver("steps", resolver)
+		builder.SetSourceResolver("agent", agentResolver)
+		if input.Random != nil {
+			builder.SetSourceResolver("random", input.Random)
+		}
+
+		result, err := builder.GetResult()
+		if err != nil {
+			return nil, fmt.Errorf("env var %q: %w", k, err)
+		}
+
+		str, ok := result.(string)
+		if !ok {
+			return nil, fmt.Errorf("env var %q resolved to non-string type: %T", k, result)
+		}
+
+		resolved[k] = str
+	}
+
+	return resolved, nil
+}
+
+// applyEnv sets additional environment variables on the command,
+// inheriting the current process environment as a base.
+func applyEnv(cmd *exec.Cmd, env map[string]string) {
+	if len(env) == 0 {
+		return
+	}
+
+	cmd.Env = os.Environ()
+	for k, v := range env {
+		cmd.Env = append(cmd.Env, k+"="+v)
+	}
 }
 
 func getShell() string {
