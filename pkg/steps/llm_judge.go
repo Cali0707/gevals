@@ -43,6 +43,7 @@ func NewLLMJudgeStep(cfg *llmjudge.LLMJudgeStepConfig) (*LLMJudgeStep, error) {
 	sources := map[string]template.SourceFactory{
 		"steps":  template.NewSourceFactory("steps"),
 		"random": template.NewSourceFactory("random"),
+		"agent":  template.NewSourceFactory("agent"),
 	}
 
 	// Parse Contains field as template if present
@@ -98,14 +99,17 @@ func (s *LLMJudgeStep) Execute(ctx context.Context, input *StepInput) (*StepOutp
 	}
 
 	resolver := NewStepOutputResolver(stepOutputs)
+	agentResolver := NewAgentResolver(input.Agent)
 	if s.containsTemplate != nil {
 		s.containsTemplate.SetSourceResolver("steps", resolver)
+		s.containsTemplate.SetSourceResolver("agent", agentResolver)
 		if input.Random != nil {
 			s.containsTemplate.SetSourceResolver("random", input.Random)
 		}
 	}
 	if s.exactTemplate != nil {
 		s.exactTemplate.SetSourceResolver("steps", resolver)
+		s.exactTemplate.SetSourceResolver("agent", agentResolver)
 		if input.Random != nil {
 			s.exactTemplate.SetSourceResolver("random", input.Random)
 		}
