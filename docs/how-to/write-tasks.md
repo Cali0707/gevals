@@ -198,6 +198,59 @@ taskSets:
 - Combine directory structure with labels for flexible organization
 - Use globs for path-based filtering, labels for semantic filtering
 
+## Task Timeouts
+
+You can set timeout limits to prevent tasks from running indefinitely. This is useful when agents get stuck in loops or when tasks interact with slow external services.
+
+### Per-task timeout
+
+Add `limits` to the task spec:
+
+```yaml
+spec:
+  limits:
+    timeout: "15m"       # Max time for setup + agent + verify
+    cleanupTimeout: "2m" # Max time for cleanup (runs even after timeout)
+
+  setup:
+    # ...
+```
+
+### Eval-level defaults
+
+Set defaults for all tasks in your eval config with `defaultTaskLimits`:
+
+```yaml
+config:
+  defaultTaskLimits:
+    timeout: "30m"
+    cleanupTimeout: "5m"
+  agent:
+    type: "builtin.claude-code"
+  taskSets:
+    - glob: tasks/**/*.yaml
+```
+
+Tasks with their own `spec.limits` override these defaults.
+
+### CLI overrides
+
+Override timeouts from the command line:
+
+```bash
+# Set a default for tasks that don't specify their own
+mcpchecker check eval.yaml --default-task-timeout 20m
+
+# Hard override ALL tasks (even those with spec.limits)
+mcpchecker check eval.yaml --task-timeout 10m
+
+# Same pattern for cleanup
+mcpchecker check eval.yaml --default-cleanup-timeout 5m
+mcpchekcer check eval.yaml --cleanup-timeout 5m
+```
+
+For the full precedence rules, see [Task Timeouts](../reference/task-format.md#task-timeouts) in the reference.
+
 ## Eval Config with Assertions
 
 A complete eval config ties together the agent, MCP server, and tasks:

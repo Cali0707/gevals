@@ -25,6 +25,10 @@ func NewEvalCmd() *cobra.Command {
 	var parallelWorkers int
 	var runs int
 	var mcpConfigFile string
+	var defaultTaskTimeout string
+	var taskTimeout string
+	var defaultCleanupTimeout string
+	var cleanupTimeout string
 
 	cmd := &cobra.Command{
 		Use:   "check [eval-config-file]",
@@ -73,6 +77,11 @@ func NewEvalCmd() *cobra.Command {
 				ParallelWorkers:   parallelWorkers,
 				Runs:              runs,
 				RunsExplicitlySet: cmd.Flags().Changed("runs"),
+
+				DefaultTaskTimeout:    defaultTaskTimeout,
+				TaskTimeout:           taskTimeout,
+				DefaultCleanupTimeout: defaultCleanupTimeout,
+				CleanupTimeout:        cleanupTimeout,
 			})
 			if err != nil {
 				return fmt.Errorf("failed to create eval runner: %w", err)
@@ -120,6 +129,10 @@ func NewEvalCmd() *cobra.Command {
 	cmd.Flags().IntVarP(&parallelWorkers, "parallel", "p", 1, "Number of parallel workers for tasks marked as parallel (1 = sequential)")
 	cmd.Flags().IntVarP(&runs, "runs", "n", 1, "Number of times to run each task (for consistency testing)")
 	cmd.Flags().StringVar(&mcpConfigFile, "mcp-config-file", "", "Path to MCP config file (overrides value in eval config)")
+	cmd.Flags().StringVar(&defaultTaskTimeout, "default-task-timeout", "", "Default timeout for tasks without their own (e.g., '15m', '1h')")
+	cmd.Flags().StringVar(&taskTimeout, "task-timeout", "", "Hard override timeout for ALL tasks (e.g., '15m', '1h')")
+	cmd.Flags().StringVar(&defaultCleanupTimeout, "default-cleanup-timeout", "", "Default cleanup timeout for tasks without their own (e.g., '2m')")
+	cmd.Flags().StringVar(&cleanupTimeout, "cleanup-timeout", "", "Hard override cleanup timeout for ALL tasks (e.g., '2m')")
 
 	return cmd
 }
@@ -197,6 +210,12 @@ func (d *progressDisplay) handleProgress(event eval.ProgressEvent) {
 	case eval.EventTaskAssertions:
 		if d.verbose {
 			fmt.Printf("%s→ Evaluating assertions...\n", prefix)
+		}
+
+	case eval.EventTaskTimeout:
+		d.red.Printf("%s⏱ Task timed out\n", prefix)
+		if event.Task.TaskError != "" {
+			fmt.Printf("%s  Error: %s\n", prefix, event.Task.TaskError)
 		}
 
 	case eval.EventTaskError:
@@ -302,7 +321,12 @@ func displayTextResults(results []*eval.EvalResult) error {
 		if result.TaskPassed {
 			green.Printf("  Task Status: PASSED\n")
 		} else {
-			if result.AgentExecutionError {
+			if result.TimedOut {
+				red.Printf("  Task Status: FAILED (Timed out)\n")
+				if result.TaskError != "" {
+					fmt.Printf("  Error: %s\n", result.TaskError)
+				}
+			} else if result.AgentExecutionError {
 				red.Printf("  Task Status: FAILED (Agent execution error)\n")
 				if result.TaskError != "" || result.TaskOutput != "" {
 					errorFile, err := saveErrorToFile(result.TaskName, result.TaskError, result.TaskOutput)

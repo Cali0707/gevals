@@ -36,6 +36,7 @@ type TaskMetadata struct {
 
 type TaskSpec struct {
 	Requires []Requirements      `json:"requires,omitempty"`
+	Limits   *util.Limits        `json:"limits,omitempty"`
 	Setup    []*steps.StepConfig `json:"setup,omitempty"`
 	Cleanup  []*steps.StepConfig `json:"cleanup,omitempty"`
 	Verify   []*steps.StepConfig `json:"verify,omitempty"`

@@ -1,0 +1,20 @@
+kind: Task
+apiVersion: mcpchecker/v1alpha2
+metadata:
+  name: "task with limits"
+  difficulty: medium
+spec:
+  limits:
+    timeout: "15m"
+    cleanupTimeout: "2m"
+  setup:
+    - script:
+        inline: "echo setup"
+  verify:
+    - script:
+        inline: "echo verify"
+  cleanup:
+    - script:
+        inline: "echo cleanup"
+  prompt:
+    inline: "Do something"
