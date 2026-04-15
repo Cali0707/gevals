@@ -106,7 +106,7 @@ func TestScriptStep_Execute(t *testing.T) {
 			config: &ScriptStepConfig{
 				Inline: "echo hello",
 			},
-			input: &StepInput{Env: map[string]string{}},
+			input: &StepInput{},
 			expected: &StepOutput{
 				Success: true,
 				Message: "hello\n",
@@ -117,21 +117,51 @@ func TestScriptStep_Execute(t *testing.T) {
 			config: &ScriptStepConfig{
 				Inline: "#!/bin/sh\necho shebang",
 			},
-			input: &StepInput{Env: map[string]string{}},
+			input: &StepInput{},
 			expected: &StepOutput{
 				Success: true,
 				Message: "shebang\n",
 			},
 			expectErr: false,
 		},
-		"inline script uses env vars": {
+		"inline script uses env vars from config": {
 			config: &ScriptStepConfig{
 				Inline: "echo $TEST_VAR",
+				Env:    map[string]string{"TEST_VAR": "from_config"},
 			},
-			input: &StepInput{Env: map[string]string{"TEST_VAR": "from_env"}},
+			input: &StepInput{},
 			expected: &StepOutput{
 				Success: true,
-				Message: "from_env\n",
+				Message: "from_config\n",
+			},
+			expectErr: false,
+		},
+		"env resolves step output template": {
+			config: &ScriptStepConfig{
+				Inline: "echo $MY_VAR",
+				Env:    map[string]string{"MY_VAR": "{steps.setup.value}"},
+			},
+			input: &StepInput{
+				StepOutputs: map[string]map[string]string{
+					"setup": {"value": "resolved_output"},
+				},
+			},
+			expected: &StepOutput{
+				Success: true,
+				Message: "resolved_output\n",
+			},
+			expectErr: false,
+		},
+		"env resolves random template": {
+			config: &ScriptStepConfig{
+				Inline: "echo $MY_ID",
+				Env:    map[string]string{"MY_ID": "{random.id}"},
+			},
+			input: &StepInput{
+				Random: NewRandomResolver(),
+			},
+			expected: &StepOutput{
+				Success: true,
 			},
 			expectErr: false,
 		},
@@ -139,7 +169,7 @@ func TestScriptStep_Execute(t *testing.T) {
 			config: &ScriptStepConfig{
 				Inline: "exit 1",
 			},
-			input:     &StepInput{Env: map[string]string{}},
+			input:     &StepInput{},
 			expectErr: true,
 		},
 		"inline script fails with continueOnError": {
@@ -147,7 +177,7 @@ func TestScriptStep_Execute(t *testing.T) {
 				Inline:          "exit 1",
 				ContinueOnError: true,
 			},
-			input: &StepInput{Env: map[string]string{}},
+			input: &StepInput{},
 			expected: &StepOutput{
 				Success: false,
 			},
@@ -195,7 +225,7 @@ func TestScriptStep_Execute_File(t *testing.T) {
 			config: &ScriptStepConfig{
 				File: scriptPath,
 			},
-			input: &StepInput{Env: map[string]string{}},
+			input: &StepInput{},
 			expected: &StepOutput{
 				Success: true,
 				Message: "file_script\n",
@@ -207,7 +237,6 @@ func TestScriptStep_Execute_File(t *testing.T) {
 				File: "test.sh",
 			},
 			input: &StepInput{
-				Env:     map[string]string{},
 				Workdir: tmpDir,
 			},
 			expected: &StepOutput{
@@ -220,7 +249,7 @@ func TestScriptStep_Execute_File(t *testing.T) {
 			config: &ScriptStepConfig{
 				File: "/nonexistent/script.sh",
 			},
-			input:     &StepInput{Env: map[string]string{}},
+			input:     &StepInput{},
 			expectErr: true,
 		},
 	}
