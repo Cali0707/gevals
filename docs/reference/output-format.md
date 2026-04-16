@@ -1,12 +1,73 @@
 # Output Format
 
-mcpchecker saves evaluation results to `mcpchecker-<eval-name>-out.json`. This file contains the full record of each task run, including pass/fail status, assertion results, and call history.
+mcpchecker saves evaluation results to `mcpchecker-<eval-name>-out.json`. This file contains the resolved configuration summary and the full record of each task run, including pass/fail status, assertion results, and call history.
 
-## Result Structure
+## Top-Level Structure
+
+The output file is a JSON object with two top-level fields:
+
+```json
+{
+  "summary": { ... },
+  "results": [ ... ]
+}
+```
+
+### Summary
+
+The `summary` object captures the resolved configuration used for the evaluation run. This makes the output self-documenting — you can always tell which agent, model, judge, and MCP servers were used.
+
+```json
+{
+  "summary": {
+    "agent": {
+      "type": "builtin.llm-agent",
+      "name": "my-agent",
+      "model": "openai:gpt-5",
+      "path": "agents/my-agent.yaml",
+      "command": "node agent.js"
+    },
+    "judge": {
+      "type": "builtin.llm-agent",
+      "name": "my-judge",
+      "model": "claude-sonnet-4",
+      "path": "agents/my-judge.yaml",
+      "command": "node judge.js"
+    },
+    "mcpServers": [
+      {
+        "name": "kubernetes",
+        "type": "http",
+        "url": "http://localhost:8080/mcp"
+      }
+    ],
+    "evals": {
+      "names": ["create-pod", "list-pods", "delete-pod"],
+      "taskSets": [
+        {
+          "glob": "../tasks/kubernetes/*.yaml",
+          "labelSelector": { "suite": "kubernetes" }
+        }
+      ]
+    },
+    "timeout": {
+      "defaultTask": "5m"
+    },
+    "parallelWorkers": 1,
+    "runs": 1
+  },
+  "results": [ ... ]
+}
+```
+
+### Results
+
+The `results` array contains one entry per task run. Each entry has the following structure:
 
 ```json
 {
   "taskName": "create-nginx-pod",
+  "taskPath": "tasks/kubernetes/create-pod.yaml",
   "taskPassed": true,
   "allAssertionsPassed": true,
   "assertionResults": {
@@ -24,6 +85,8 @@ mcpchecker saves evaluation results to `mcpchecker-<eval-name>-out.json`. This f
   }
 }
 ```
+
+> **Legacy format:** Older output files (pre-summary) used a bare JSON array at the top level. All CLI commands (`view`, `summary`, `diff`, `verify`) auto-detect and support both formats. Support for the legacy format is deprecated and will be removed in a future release — re-run evaluations to generate output in the current format.
 
 ## Interpreting Results
 
